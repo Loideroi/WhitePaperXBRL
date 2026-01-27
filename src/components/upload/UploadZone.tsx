@@ -19,8 +19,20 @@ interface UploadResponse {
     size: number;
     tokenType?: string;
     uploadedAt: string;
-    expiresAt: string;
     status: string;
+    extraction: {
+      pages: number;
+      metadata: {
+        title?: string;
+        author?: string;
+        creationDate?: string;
+      };
+    };
+    mapping: {
+      data: Record<string, unknown>;
+      mappings: Array<{ field: string; value: unknown; confidence: number; source: string }>;
+      confidence: { overall: number };
+    };
   };
   error?: {
     code: string;
@@ -134,6 +146,9 @@ export function UploadZone({
         }
 
         if (data.data) {
+          // Store complete data in localStorage for the transform page
+          localStorage.setItem(`whitepaper-${data.data.sessionId}`, JSON.stringify(data.data));
+
           setStatus('success');
           setUploadedFile({ name: file.name, sessionId: data.data.sessionId });
           onUploadComplete?.(data.data.sessionId, file.name);

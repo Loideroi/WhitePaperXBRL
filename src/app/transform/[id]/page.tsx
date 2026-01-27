@@ -22,7 +22,6 @@ import { SectionEditor } from '@/components/editor';
 import { ValidationDashboard, type ValidationError } from '@/components/validation';
 import { IXBRLPreview } from '@/components/preview';
 import type { MappedField, WhitepaperData } from '@/types/whitepaper';
-import type { ProcessResponse } from '@/app/api/process/route';
 import type { TokenType } from '@/types/taxonomy';
 
 interface SectionConfig {
@@ -268,43 +267,42 @@ export default function TransformPage() {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const downloadRef = useRef<HTMLAnchorElement>(null);
 
-  // Process the PDF on mount
+  // Load processed data from localStorage on mount
   useEffect(() => {
-    async function processUpload() {
+    function loadSessionData() {
       setLoadingState('processing');
       setError(null);
 
       try {
-        const response = await fetch('/api/process', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId }),
-        });
+        // Read from localStorage (data was stored during upload)
+        const storedData = localStorage.getItem(`whitepaper-${sessionId}`);
 
-        const result: ProcessResponse = await response.json();
-
-        if (!result.success || !result.data) {
-          throw new Error(result.error?.message || 'Processing failed');
+        if (!storedData) {
+          throw new Error('Session not found. Please upload your PDF again.');
         }
 
-        setData(result.data.mapping.data);
-        setMappings(result.data.mapping.mappings);
-        setFilename(result.data.filename);
-        setPages(result.data.extraction.pages);
-        setConfidence(result.data.mapping.confidence.overall);
-        // Set token type from the mapping data or default to OTHR
-        if (result.data.mapping.data.tokenType) {
-          setTokenType(result.data.mapping.data.tokenType as TokenType);
+        const sessionData = JSON.parse(storedData);
+
+        setData(sessionData.mapping.data as Partial<WhitepaperData>);
+        setMappings(sessionData.mapping.mappings as MappedField[]);
+        setFilename(sessionData.filename);
+        setPages(sessionData.extraction.pages);
+        setConfidence(sessionData.mapping.confidence.overall);
+
+        // Set token type from the session data
+        if (sessionData.tokenType) {
+          setTokenType(sessionData.tokenType as TokenType);
         }
+
         setLoadingState('success');
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Processing failed');
+        setError(err instanceof Error ? err.message : 'Failed to load session data');
         setLoadingState('error');
       }
     }
 
     if (sessionId) {
-      processUpload();
+      loadSessionData();
     }
   }, [sessionId]);
 

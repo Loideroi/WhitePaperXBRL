@@ -1,7 +1,10 @@
 /**
  * PDF Upload API Endpoint
  *
- * POST /api/upload - Upload a PDF whitepaper for processing
+ * POST /api/upload - Upload and process a PDF whitepaper in one step
+ *
+ * In serverless environments, we process immediately instead of storing
+ * the file for later processing.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -13,41 +16,15 @@ import {
   rateLimitHeaders,
   RATE_LIMITS,
 } from '@/lib/security';
+import { extractPdfText } from '@/lib/pdf/extractor';
+import { mapPdfToWhitepaper } from '@/lib/pdf/field-mapper';
+import type { TokenType } from '@/types/taxonomy';
 
 // Maximum file size: 50MB
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 // PDF magic bytes
 const PDF_MAGIC_BYTES = [0x25, 0x50, 0x44, 0x46]; // %PDF
-
-// In-memory session store (replace with Redis/DB in production)
-const sessions = new Map<
-  string,
-  {
-    filename: string;
-    size: number;
-    tokenType?: string;
-    uploadedAt: Date;
-    expiresAt: Date;
-    status: 'pending' | 'processing' | 'complete' | 'failed';
-    pdfBuffer?: Buffer;
-    extractedText?: string;
-    error?: string;
-  }
->();
-
-// Clean up expired sessions periodically
-setInterval(
-  () => {
-    const now = new Date();
-    for (const [id, session] of sessions.entries()) {
-      if (session.expiresAt < now) {
-        sessions.delete(id);
-      }
-    }
-  },
-  5 * 60 * 1000
-); // Every 5 minutes
 
 const UploadQuerySchema = z.object({
   tokenType: z.enum(['OTHR', 'ART', 'EMT']).optional(),
@@ -86,7 +63,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Parse form data
     const formData = await request.formData();
     const file = formData.get('file');
-    const tokenType = formData.get('tokenType') as string | null;
+    const tokenType = (formData.get('tokenType') as string | null) || 'OTHR';
 
     // Validate file presence
     if (!file || !(file instanceof File)) {
@@ -134,40 +111,31 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Validate token type if provided
-    if (tokenType) {
-      const result = UploadQuerySchema.safeParse({ tokenType });
-      if (!result.success) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: 'INVALID_TOKEN_TYPE',
-              message: 'Token type must be OTHR, ART, or EMT',
-            },
+    // Validate token type
+    const tokenTypeResult = UploadQuerySchema.safeParse({ tokenType });
+    if (!tokenTypeResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'INVALID_TOKEN_TYPE',
+            message: 'Token type must be OTHR, ART, or EMT',
           },
-          { status: 400 }
-        );
-      }
+        },
+        { status: 400 }
+      );
     }
 
-    // Generate session
+    // Generate session ID for tracking
     const sessionId = generateSessionId();
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + 60 * 60 * 1000); // 1 hour
 
-    // Store session
-    sessions.set(sessionId, {
-      filename: file.name,
-      size: file.size,
-      tokenType: tokenType || undefined,
-      uploadedAt: now,
-      expiresAt,
-      status: 'pending',
-      pdfBuffer: buffer,
-    });
+    // Process the PDF immediately (serverless-friendly)
+    const extraction = await extractPdfText(buffer);
+    const effectiveTokenType = tokenType as TokenType;
+    const mapping = mapPdfToWhitepaper(extraction, effectiveTokenType);
 
-    // Return success response
+    // Return complete processing result
     return NextResponse.json(
       {
         success: true,
@@ -175,53 +143,36 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           sessionId,
           filename: file.name,
           size: file.size,
-          tokenType: tokenType || undefined,
+          tokenType: effectiveTokenType,
           uploadedAt: now.toISOString(),
-          expiresAt: expiresAt.toISOString(),
-          status: 'pending',
+          status: 'complete',
+          extraction: {
+            pages: extraction.pages,
+            metadata: {
+              title: extraction.metadata.title,
+              author: extraction.metadata.author,
+              creationDate: extraction.metadata.creationDate,
+            },
+          },
+          mapping,
         },
       },
       {
-        status: 201,
+        status: 200,
         headers: rateLimitHeaders(rateLimit),
       }
     );
   } catch (error) {
-    console.error('Upload error:', error);
+    console.error('Upload/process error:', error);
     return NextResponse.json(
       {
         success: false,
         error: {
-          code: 'UPLOAD_FAILED',
-          message: 'Failed to process upload',
+          code: 'PROCESSING_FAILED',
+          message: error instanceof Error ? error.message : 'Failed to process PDF',
         },
       },
       { status: 500 }
     );
-  }
-}
-
-/**
- * Get session by ID (internal use)
- */
-export function getSession(sessionId: string) {
-  return sessions.get(sessionId);
-}
-
-/**
- * Update session (internal use)
- */
-export function updateSession(
-  sessionId: string,
-  updates: Partial<{
-    status: 'pending' | 'processing' | 'complete' | 'failed';
-    extractedText: string;
-    error: string;
-    tokenType: string;
-  }>
-) {
-  const session = sessions.get(sessionId);
-  if (session) {
-    sessions.set(sessionId, { ...session, ...updates });
   }
 }
