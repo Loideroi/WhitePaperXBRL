@@ -155,24 +155,24 @@ describe('mapPdfToWhitepaper', () => {
   });
 
   describe('Part H - Technology', () => {
-    it('should extract blockchain description', () => {
+    it('should extract blockchain description from H.1 DLT', () => {
       const extraction = createExtractionResult([
-        ['partH', 'H.1    Blockchain Description    Ethereum-based EVM compatible chain'],
+        ['partH', 'H.1    Distributed ledger technology    The Chiliz Chain is an EVM compatible layer 1 blockchain'],
       ]);
 
       const result = mapPdfToWhitepaper(extraction);
 
-      expect(result.data.partH?.blockchainDescription).toBe('Ethereum-based EVM compatible chain');
+      expect(result.data.partH?.blockchainDescription).toBe('The Chiliz Chain is an EVM compatible layer 1 blockchain');
     });
 
-    it('should extract smart contract info', () => {
+    it('should extract smart contract info from H.2 protocols', () => {
       const extraction = createExtractionResult([
-        ['partH', 'H.2    Smart Contract    0x1234567890abcdef'],
+        ['partH', 'H.2    Protocols and technical standards    CAP-20 Token Standard compatible with ERC-20'],
       ]);
 
       const result = mapPdfToWhitepaper(extraction);
 
-      expect(result.data.partH?.smartContractInfo).toBe('0x1234567890abcdef');
+      expect(result.data.partH?.smartContractInfo).toBe('CAP-20 Token Standard compatible with ERC-20');
     });
 
     it('should extract security audit info', () => {
@@ -280,7 +280,7 @@ describe('mapPdfToWhitepaper', () => {
       const extraction = createExtractionResult([
         ['partA', '1. Legal Name: Offeror Ltd\n2. LEI: 529900T8BM49AURSDO55'],
         ['partD', '1. Token Name: Test Token\n2. Symbol: TST'],
-        ['partH', '1. Blockchain Description: Ethereum based network'],
+        ['partH', 'H.1    Distributed ledger technology    Ethereum based network'],
       ]);
 
       const result = mapPdfToWhitepaper(extraction, 'OTHR');
