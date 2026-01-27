@@ -101,9 +101,9 @@ describe('mapPdfToWhitepaper', () => {
       expect(result.data.partD?.totalSupply).toBe(100000000);
     });
 
-    it('should extract blockchain network', () => {
+    it('should extract blockchain network from F.1', () => {
       const extraction = createExtractionResult([
-        ['partD', 'D.6    Blockchain    Chiliz Chain'],
+        ['partF', 'F.1    Crypto-asset type    The $SPURS operates on the Chiliz Chain'],
       ]);
 
       const result = mapPdfToWhitepaper(extraction);

@@ -89,6 +89,16 @@ export default function Home() {
           <p className="mt-1">
             Compliant with Commission Implementing Regulation (EU) 2024/2984
           </p>
+          <p className="mt-3">
+            <a
+              href="https://www.esma.europa.eu/document/mica-taxonomy-2025"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              ESMA MiCA Taxonomy 2025
+            </a>
+          </p>
         </div>
       </footer>
     </main>
