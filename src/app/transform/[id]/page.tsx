@@ -6,12 +6,24 @@
  * Displays extracted whitepaper fields and allows editing before generating iXBRL.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  FileText,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  Download,
+  Eye,
+  X,
+} from 'lucide-react';
 import { SectionEditor } from '@/components/editor';
+import { ValidationDashboard, type ValidationError } from '@/components/validation';
+import { IXBRLPreview } from '@/components/preview';
 import type { MappedField, WhitepaperData } from '@/types/whitepaper';
 import type { ProcessResponse } from '@/app/api/process/route';
+import type { TokenType } from '@/types/taxonomy';
 
 interface SectionConfig {
   id: string;
@@ -230,6 +242,7 @@ const SECTIONS: SectionConfig[] = [
 ];
 
 type LoadingState = 'idle' | 'processing' | 'success' | 'error';
+type GenerateState = 'idle' | 'validating' | 'generating' | 'preview' | 'complete' | 'error';
 
 export default function TransformPage() {
   const params = useParams();
@@ -244,6 +257,16 @@ export default function TransformPage() {
   const [pages, setPages] = useState<number>(0);
   const [confidence, setConfidence] = useState<number>(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [tokenType, setTokenType] = useState<TokenType>('OTHR');
+
+  // Generation state
+  const [generateState, setGenerateState] = useState<GenerateState>('idle');
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [showValidation, setShowValidation] = useState(false);
+  const [previewContent, setPreviewContent] = useState<string | null>(null);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const downloadRef = useRef<HTMLAnchorElement>(null);
 
   // Process the PDF on mount
   useEffect(() => {
@@ -269,6 +292,10 @@ export default function TransformPage() {
         setFilename(result.data.filename);
         setPages(result.data.extraction.pages);
         setConfidence(result.data.mapping.confidence.overall);
+        // Set token type from the mapping data or default to OTHR
+        if (result.data.mapping.data.tokenType) {
+          setTokenType(result.data.mapping.data.tokenType as TokenType);
+        }
         setLoadingState('success');
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Processing failed');
@@ -318,11 +345,166 @@ export default function TransformPage() {
     router.push('/');
   }, [router]);
 
-  // Handle generate action (placeholder for now)
-  const handleGenerate = useCallback(() => {
-    // TODO: Implement validation and generation
-    alert('iXBRL generation will be implemented in Phase 4');
-  }, []);
+  // Handle validation
+  const handleValidate = useCallback(async () => {
+    setGenerateState('validating');
+    setGenerateError(null);
+    setValidationErrors([]);
+
+    try {
+      const response = await fetch('/api/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: { ...data, tokenType },
+          tokenType,
+          options: { quickMode: false },
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error?.message || 'Validation failed');
+      }
+
+      // Map API errors to ValidationDashboard format
+      const errors: ValidationError[] = [
+        ...(result.data.errors || []).map((e: { message: string; fieldPath?: string; ruleId?: string }) => ({
+          path: e.fieldPath || 'unknown',
+          message: e.message,
+          severity: 'error' as const,
+          code: e.ruleId,
+        })),
+        ...(result.data.warnings || []).map((w: { message: string; fieldPath?: string; ruleId?: string }) => ({
+          path: w.fieldPath || 'unknown',
+          message: w.message,
+          severity: 'warning' as const,
+          code: w.ruleId,
+        })),
+      ];
+
+      setValidationErrors(errors);
+      setShowValidation(true);
+
+      return errors.filter((e) => e.severity === 'error').length === 0;
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : 'Validation failed');
+      setGenerateState('error');
+      return false;
+    }
+  }, [data, tokenType]);
+
+  // Handle generation
+  const handleGenerate = useCallback(async () => {
+    // First validate
+    const isValid = await handleValidate();
+
+    if (!isValid) {
+      setGenerateState('idle');
+      return;
+    }
+
+    // Then generate
+    setGenerateState('generating');
+
+    try {
+      // Generate iXBRL
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: { ...data, tokenType, documentDate: new Date().toISOString().split('T')[0] },
+          format: 'ixbrl',
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Generation failed');
+      }
+
+      // Get the blob for download
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      setDownloadUrl(url);
+
+      // Get filename from Content-Disposition header or generate one
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let outputFilename = `whitepaper-${data.partD?.cryptoAssetSymbol?.toLowerCase() || 'crypto'}.xhtml`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="(.+)"/);
+        if (match?.[1]) {
+          outputFilename = match[1];
+        }
+      }
+
+      // Also fetch preview content
+      const previewResponse = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: { ...data, tokenType, documentDate: new Date().toISOString().split('T')[0] },
+          format: 'ixbrl',
+        }),
+      });
+
+      if (previewResponse.ok) {
+        const previewText = await previewResponse.text();
+        setPreviewContent(previewText);
+      }
+
+      setGenerateState('complete');
+
+      // Trigger download
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = outputFilename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : 'Generation failed');
+      setGenerateState('error');
+    }
+  }, [data, tokenType, handleValidate]);
+
+  // Handle preview
+  const handlePreview = useCallback(async () => {
+    setGenerateState('generating');
+
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: { ...data, tokenType, documentDate: new Date().toISOString().split('T')[0] },
+          format: 'ixbrl',
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Preview generation failed');
+      }
+
+      const content = await response.text();
+      setPreviewContent(content);
+      setGenerateState('preview');
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : 'Preview failed');
+      setGenerateState('error');
+    }
+  }, [data, tokenType]);
+
+  // Cleanup download URL on unmount
+  useEffect(() => {
+    return () => {
+      if (downloadUrl) {
+        URL.revokeObjectURL(downloadUrl);
+      }
+    };
+  }, [downloadUrl]);
 
   // Loading state
   if (loadingState === 'processing') {
@@ -377,12 +559,25 @@ export default function TransformPage() {
             </div>
           </div>
 
-          <button
-            onClick={handleGenerate}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
-          >
-            Generate iXBRL
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePreview}
+              disabled={generateState === 'generating' || generateState === 'validating'}
+              className="px-3 py-2 rounded-lg border border-border bg-background text-foreground font-medium hover:bg-muted transition-colors flex items-center gap-2 disabled:opacity-50"
+            >
+              <Eye className="h-4 w-4" />
+              Preview
+            </button>
+            <button
+              onClick={handleGenerate}
+              disabled={generateState === 'generating' || generateState === 'validating'}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50"
+            >
+              {generateState === 'validating' && <Loader2 className="h-4 w-4 animate-spin" />}
+              {generateState === 'generating' && <Loader2 className="h-4 w-4 animate-spin" />}
+              {generateState === 'validating' ? 'Validating...' : generateState === 'generating' ? 'Generating...' : 'Generate iXBRL'}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -420,6 +615,64 @@ export default function TransformPage() {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-3xl mx-auto space-y-6">
+          {/* Validation Panel */}
+          {showValidation && (
+            <div className="relative">
+              <button
+                onClick={() => setShowValidation(false)}
+                className="absolute top-2 right-2 p-1 rounded hover:bg-muted z-10"
+                aria-label="Close validation"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <ValidationDashboard
+                errors={validationErrors}
+                isValidating={generateState === 'validating'}
+                onFieldClick={(path) => {
+                  // Scroll to field (simplified for now)
+                  const sectionId = path.split('.')[0];
+                  const element = document.getElementById(sectionId || '');
+                  element?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              />
+            </div>
+          )}
+
+          {/* Generation Error */}
+          {generateState === 'error' && generateError && (
+            <div className="rounded-lg border border-destructive bg-destructive/10 p-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+                <span className="font-medium text-destructive">Generation Failed</span>
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">{generateError}</p>
+            </div>
+          )}
+
+          {/* Success Message */}
+          {generateState === 'complete' && (
+            <div className="rounded-lg border border-green-500 bg-green-500/10 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <span className="font-medium text-green-600">iXBRL Generated Successfully</span>
+                </div>
+                {downloadUrl && (
+                  <a
+                    ref={downloadRef}
+                    href={downloadUrl}
+                    download={`whitepaper-${data.partD?.cryptoAssetSymbol?.toLowerCase() || 'crypto'}.xhtml`}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors"
+                  >
+                    <Download className="h-4 w-4" />
+                    Download Again
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Section Editors */}
           {SECTIONS.map((section) => (
             <SectionEditor
               key={section.id}
@@ -437,18 +690,51 @@ export default function TransformPage() {
         </div>
       </main>
 
+      {/* Preview Modal */}
+      {generateState === 'preview' && previewContent && (
+        <IXBRLPreview
+          content={previewContent}
+          filename={`whitepaper-${data.partD?.cryptoAssetSymbol?.toLowerCase() || 'crypto'}.xhtml`}
+          onClose={() => setGenerateState('idle')}
+          onDownload={handleGenerate}
+        />
+      )}
+
       {/* Footer */}
       <footer className="border-t bg-background py-4 sticky bottom-0">
         <div className="container mx-auto px-4 flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Review and complete all required fields before generating
-          </p>
-          <button
-            onClick={handleGenerate}
-            className="px-6 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
-          >
-            Generate iXBRL
-          </button>
+          <div className="flex items-center gap-4">
+            <p className="text-sm text-muted-foreground">
+              Review and complete all required fields before generating
+            </p>
+            {/* Token Type Badge */}
+            <span className="inline-block px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-mono font-semibold">
+              {tokenType}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleValidate().then(() => setGenerateState('idle'))}
+              disabled={generateState === 'generating' || generateState === 'validating'}
+              className="px-4 py-2 rounded-lg border border-border bg-background text-foreground font-medium hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              Validate Only
+            </button>
+            <button
+              onClick={handleGenerate}
+              disabled={generateState === 'generating' || generateState === 'validating'}
+              className="px-6 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50"
+            >
+              {(generateState === 'validating' || generateState === 'generating') && (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}
+              {generateState === 'validating'
+                ? 'Validating...'
+                : generateState === 'generating'
+                  ? 'Generating...'
+                  : 'Generate iXBRL'}
+            </button>
+          </div>
         </div>
       </footer>
     </div>
