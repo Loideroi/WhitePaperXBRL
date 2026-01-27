@@ -7,6 +7,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { generateSessionId } from '@/lib/utils';
+import {
+  checkRateLimit,
+  getClientIdentifier,
+  rateLimitHeaders,
+  RATE_LIMITS,
+} from '@/lib/security';
 
 // Maximum file size: 50MB
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -56,6 +62,26 @@ function isPdfBuffer(buffer: Buffer): boolean {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  // Rate limiting
+  const clientId = getClientIdentifier(request);
+  const rateLimit = checkRateLimit(`upload:${clientId}`, RATE_LIMITS.upload);
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'RATE_LIMITED',
+          message: 'Too many upload requests. Please try again later.',
+        },
+      },
+      {
+        status: 429,
+        headers: rateLimitHeaders(rateLimit),
+      }
+    );
+  }
+
   try {
     // Parse form data
     const formData = await request.formData();
@@ -155,7 +181,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           status: 'pending',
         },
       },
-      { status: 201 }
+      {
+        status: 201,
+        headers: rateLimitHeaders(rateLimit),
+      }
     );
   } catch (error) {
     console.error('Upload error:', error);

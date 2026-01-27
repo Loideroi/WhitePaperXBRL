@@ -14,6 +14,12 @@ import {
   validateField,
   getValidationRequirements,
 } from '@/lib/xbrl/validator';
+import {
+  checkRateLimit,
+  getClientIdentifier,
+  rateLimitHeaders,
+  RATE_LIMITS,
+} from '@/lib/security';
 
 /**
  * Request body schema
@@ -32,6 +38,26 @@ const ValidateRequestSchema = z.object({
 });
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  // Rate limiting
+  const clientId = getClientIdentifier(request);
+  const rateLimit = checkRateLimit(`validate:${clientId}`, RATE_LIMITS.validate);
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'RATE_LIMITED',
+          message: 'Too many validation requests. Please try again later.',
+        },
+      },
+      {
+        status: 429,
+        headers: rateLimitHeaders(rateLimit),
+      }
+    );
+  }
+
   try {
     // Parse request body
     const body = await request.json();

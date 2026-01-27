@@ -6,8 +6,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { WhitepaperDataSchema, type WhitepaperData } from '@/types/whitepaper';
+import { type WhitepaperData } from '@/types/whitepaper';
 import { generateIXBRLDocument } from '@/lib/xbrl/generator';
+import {
+  checkRateLimit,
+  getClientIdentifier,
+  rateLimitHeaders,
+  RATE_LIMITS,
+} from '@/lib/security';
 
 /**
  * Basic validation errors
@@ -55,6 +61,26 @@ function validateRequiredFields(data: Partial<WhitepaperData>): ValidationError[
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  // Rate limiting
+  const clientId = getClientIdentifier(request);
+  const rateLimit = checkRateLimit(`generate:${clientId}`, RATE_LIMITS.generate);
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'RATE_LIMITED',
+          message: 'Too many generation requests. Please try again later.',
+        },
+      },
+      {
+        status: 429,
+        headers: rateLimitHeaders(rateLimit),
+      }
+    );
+  }
+
   try {
     // Parse request body
     const body = await request.json();
