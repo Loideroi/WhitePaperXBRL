@@ -7,6 +7,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { FileUp, X, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import type { TokenType } from '@/types/taxonomy';
 
@@ -61,6 +62,7 @@ export function UploadZone({
   onUploadError,
   maxSize = 50 * 1024 * 1024,
 }: UploadZoneProps) {
+  const router = useRouter();
   const [status, setStatus] = useState<UploadStatus>('idle');
   const [selectedTokenType, setSelectedTokenType] = useState<TokenType>('OTHR');
   const [error, setError] = useState<string | null>(null);
@@ -342,6 +344,7 @@ export function UploadZone({
           </p>
           <button
             type="button"
+            onClick={() => router.push(`/transform/${uploadedFile.sessionId}`)}
             className="mt-3 w-full py-2 px-4 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors"
           >
             Continue to Field Mapping
