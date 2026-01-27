@@ -2,6 +2,7 @@
  * Field Mapper
  *
  * Maps extracted PDF content to XBRL taxonomy fields with confidence scoring.
+ * Optimized for ESMA MiCA whitepaper format with numbered sections (A.1, D.4, E.28, etc.)
  */
 
 import type { WhitepaperData, ConfidenceLevel, MappedField } from '@/types/whitepaper';
@@ -11,225 +12,293 @@ import {
   extractMonetaryValue,
   extractDate,
   extractNumber,
-  extractTableRows,
   type PdfExtractionResult,
 } from './extractor';
 
 /**
- * Field mapping configuration
+ * MiCA Section number to field mapping
  */
-interface FieldMappingConfig {
-  /** Patterns to match field labels */
-  patterns: (RegExp | string)[];
+interface MiCASectionMapping {
+  /** Section numbers (e.g., "A.1", "A.2") */
+  sectionNumbers: string[];
+  /** Alternative patterns for the field */
+  patterns: RegExp[];
   /** Target path in WhitepaperData */
   targetPath: string;
   /** Transform function */
-  transform?: (value: string) => unknown;
+  transform?: (value: string, fullText: string) => unknown;
   /** Base confidence level */
   confidence: ConfidenceLevel;
-  /** Which parts this field appears in */
-  parts?: string[];
+  /** Whether to capture multiple lines */
+  multiLine?: boolean;
 }
 
 /**
- * Field mappings for common whitepaper fields
+ * MiCA whitepaper section mappings
+ * Based on ESMA MiCA Implementing Regulation structure
  */
-const FIELD_MAPPINGS: FieldMappingConfig[] = [
+const MICA_SECTION_MAPPINGS: MiCASectionMapping[] = [
   // Part A: Offeror Information
   {
-    patterns: [/legal\s*name|company\s*name|entity\s*name|name\s*of\s*(?:the\s*)?offeror/i],
+    sectionNumbers: ['A.1', 'A.2'],
+    patterns: [/legal\s*name|name\s*of\s*(?:the\s*)?offeror|company\s*name/i],
     targetPath: 'partA.legalName',
     confidence: 'high',
-    parts: ['A', 'partA'],
   },
   {
-    patterns: [/\blei\b|legal\s*entity\s*identifier/i],
+    sectionNumbers: ['A.3', 'A.4'],
+    patterns: [/\bLEI\b|legal\s*entity\s*identifier/i],
     targetPath: 'partA.lei',
-    transform: (v) => {
-      const lei = extractLEI(v);
-      return lei?.value || v.replace(/\s/g, '').toUpperCase();
-    },
+    transform: extractLEIValue,
     confidence: 'high',
-    parts: ['A', 'partA'],
   },
   {
-    patterns: [/registered\s*address|business\s*address|address\s*of/i],
+    sectionNumbers: ['A.5', 'A.6', 'A.7'],
+    patterns: [/registered\s*(?:office\s*)?address|business\s*address/i],
     targetPath: 'partA.registeredAddress',
-    confidence: 'medium',
-    parts: ['A', 'partA'],
+    multiLine: true,
+    confidence: 'high',
   },
   {
-    patterns: [/country|jurisdiction|home\s*member\s*state/i],
+    sectionNumbers: ['A.8', 'A.9'],
+    patterns: [/country|jurisdiction|member\s*state/i],
     targetPath: 'partA.country',
-    transform: (v) => extractCountryCode(v),
+    transform: extractCountryCode,
     confidence: 'medium',
-    parts: ['A', 'partA'],
   },
   {
-    patterns: [/website|url|web\s*address/i],
+    sectionNumbers: ['A.10', 'A.11'],
+    patterns: [/website|web\s*address|url/i],
     targetPath: 'partA.website',
     transform: extractUrl,
     confidence: 'high',
-    parts: ['A', 'partA'],
   },
   {
-    patterns: [/e-?mail|email\s*address|contact\s*email/i],
+    sectionNumbers: ['A.12', 'A.13'],
+    patterns: [/e-?mail|contact.*email/i],
     targetPath: 'partA.contactEmail',
     transform: extractEmail,
     confidence: 'high',
-    parts: ['A', 'partA'],
   },
 
-  // Part D: Project Information
+  // Part D: Crypto-asset Project Information
   {
-    patterns: [/crypto[\s-]*asset\s*name|token\s*name|name\s*of\s*(?:the\s*)?crypto/i],
+    sectionNumbers: ['D.1', 'D.2', 'D.3'],
+    patterns: [/name\s*of\s*(?:the\s*)?crypto|crypto[\s-]*asset\s*name|token\s*name/i],
     targetPath: 'partD.cryptoAssetName',
     confidence: 'high',
-    parts: ['D', 'partD'],
   },
   {
+    sectionNumbers: ['D.3', 'D.4'],
     patterns: [/ticker|symbol|abbreviation/i],
     targetPath: 'partD.cryptoAssetSymbol',
-    transform: (v) => v.replace(/[$]/g, '').toUpperCase().trim(),
+    transform: (v) => v.replace(/[$]/g, '').replace(/[^\w]/g, '').toUpperCase().slice(0, 10),
     confidence: 'high',
-    parts: ['D', 'partD'],
   },
   {
-    patterns: [/total\s*supply|maximum\s*supply|token\s*supply/i],
-    targetPath: 'partD.totalSupply',
-    transform: (v) => {
-      const num = extractNumber(v);
-      return num?.value || parseInt(v.replace(/[^\d]/g, ''), 10);
-    },
-    confidence: 'high',
-    parts: ['D', 'partD'],
-  },
-  {
-    patterns: [/token\s*standard|protocol|standard/i],
-    targetPath: 'partD.tokenStandard',
-    confidence: 'medium',
-    parts: ['D', 'partD'],
-  },
-  {
-    patterns: [/blockchain|network|chain|distributed\s*ledger/i],
-    targetPath: 'partD.blockchainNetwork',
-    confidence: 'medium',
-    parts: ['D', 'partD'],
-  },
-  {
-    patterns: [/consensus\s*mechanism|consensus\s*algorithm/i],
-    targetPath: 'partD.consensusMechanism',
-    confidence: 'high',
-    parts: ['D', 'partD', 'H', 'partH'],
-  },
-  {
-    patterns: [/project\s*description|description\s*of\s*(?:the\s*)?project/i],
+    sectionNumbers: ['D.4', 'D.5'],
+    patterns: [/description\s*of\s*(?:the\s*)?(?:crypto|project)|project\s*description/i],
     targetPath: 'partD.projectDescription',
+    multiLine: true,
     confidence: 'medium',
-    parts: ['D', 'partD'],
+  },
+
+  // Part F: Token characteristics
+  {
+    sectionNumbers: ['F.1', 'F.2'],
+    patterns: [/token\s*standard|protocol\s*standard|technical\s*standard/i],
+    targetPath: 'partD.tokenStandard',
+    confidence: 'high',
+  },
+  {
+    sectionNumbers: ['F.5', 'F.6'],
+    patterns: [/total\s*(?:token\s*)?supply|maximum\s*supply|supply\s*cap/i],
+    targetPath: 'partD.totalSupply',
+    transform: extractTotalSupply,
+    confidence: 'high',
   },
 
   // Part E: Offering Details
   {
-    patterns: [/public\s*offering|offer\s*to\s*(?:the\s*)?public/i],
+    sectionNumbers: ['E.1', 'E.2', 'E.3'],
+    patterns: [/public\s*offer|offer\s*to\s*(?:the\s*)?public/i],
     targetPath: 'partE.isPublicOffering',
-    transform: (v) => /yes|true|public/i.test(v),
+    transform: (v) => {
+      // Check if it's explicitly stating public offer
+      return /yes|public\s*offer|offer\s*to\s*(?:the\s*)?public/i.test(v);
+    },
     confidence: 'high',
-    parts: ['E', 'partE'],
   },
   {
-    patterns: [/offering\s*start|subscription\s*(?:period\s*)?start|start\s*date/i],
+    sectionNumbers: ['E.25', 'E.26', 'E.27'],
+    patterns: [/start\s*(?:date|of)|subscription\s*(?:period\s*)?(?:start|begin)|opens?\s*on/i],
     targetPath: 'partE.publicOfferingStartDate',
-    transform: (v) => extractDate(v)?.date || v,
+    transform: extractDateValue,
     confidence: 'medium',
-    parts: ['E', 'partE'],
   },
   {
-    patterns: [/offering\s*end|subscription\s*(?:period\s*)?end|end\s*date/i],
+    sectionNumbers: ['E.28', 'E.29', 'E.30'],
+    patterns: [/end\s*(?:date|of)|subscription\s*(?:period\s*)?end|closes?\s*on|close\s*date/i],
     targetPath: 'partE.publicOfferingEndDate',
-    transform: (v) => extractDate(v)?.date || v,
+    transform: extractDateValue,
     confidence: 'medium',
-    parts: ['E', 'partE'],
   },
   {
-    patterns: [/token\s*price|price\s*per\s*token|issue\s*price/i],
+    sectionNumbers: ['E.8', 'E.9', 'E.10'],
+    patterns: [/token\s*price|price\s*per\s*(?:token|unit)|issue\s*price|offering\s*price/i],
     targetPath: 'partE.tokenPrice',
-    transform: (v) => extractMonetaryValue(v)?.amount || parseFloat(v.replace(/[^\d.]/g, '')),
+    transform: (v) => {
+      const monetary = extractMonetaryValue(v);
+      return monetary?.amount || parseFloat(v.replace(/[^\d.,]/g, '').replace(',', '.'));
+    },
     confidence: 'high',
-    parts: ['E', 'partE'],
   },
   {
-    patterns: [/maximum\s*(?:subscription\s*)?goal|subscription\s*goal|funding\s*goal/i],
+    sectionNumbers: ['E.9', 'E.12', 'E.13'],
+    patterns: [/maximum\s*(?:amount|subscription|tokens?\s*offered)|subscription\s*goal|funding\s*(?:goal|target)/i],
     targetPath: 'partE.maxSubscriptionGoal',
-    transform: (v) => extractMonetaryValue(v)?.amount || parseFloat(v.replace(/[^\d.]/g, '')),
+    transform: (v) => {
+      const monetary = extractMonetaryValue(v);
+      return monetary?.amount || parseFloat(v.replace(/[^\d.,]/g, '').replace(',', '.'));
+    },
     confidence: 'medium',
-    parts: ['E', 'partE'],
   },
   {
-    patterns: [/withdrawal\s*rights?|right\s*(?:of|to)\s*withdraw/i],
+    sectionNumbers: ['E.20', 'E.21', 'E.22'],
+    patterns: [/withdrawal\s*right|right\s*(?:of|to)\s*withdraw/i],
     targetPath: 'partE.withdrawalRights',
-    transform: (v) => /yes|true|entitled|right/i.test(v),
+    transform: (v) => /yes|entitled|right|can\s*withdraw|14\s*(?:calendar\s*)?days?/i.test(v),
     confidence: 'high',
-    parts: ['E', 'partE'],
   },
 
   // Part H: Technology
   {
-    patterns: [/blockchain\s*(?:platform\s*)?description|technology\s*description/i],
-    targetPath: 'partH.blockchainDescription',
-    confidence: 'medium',
-    parts: ['H', 'partH'],
+    sectionNumbers: ['H.1', 'H.2', 'H.3'],
+    patterns: [/consensus\s*mechanism|consensus\s*(?:algorithm|protocol)/i],
+    targetPath: 'partD.consensusMechanism',
+    confidence: 'high',
   },
   {
+    sectionNumbers: ['H.1', 'H.2'],
+    patterns: [/blockchain|distributed\s*ledger|DLT|network/i],
+    targetPath: 'partD.blockchainNetwork',
+    confidence: 'medium',
+  },
+  {
+    sectionNumbers: ['H.3', 'H.4', 'H.5'],
+    patterns: [/blockchain\s*description|technology\s*(?:description|overview)/i],
+    targetPath: 'partH.blockchainDescription',
+    multiLine: true,
+    confidence: 'medium',
+  },
+  {
+    sectionNumbers: ['H.6', 'H.7', 'H.8'],
     patterns: [/smart\s*contract|contract\s*address/i],
     targetPath: 'partH.smartContractInfo',
+    multiLine: true,
     confidence: 'medium',
-    parts: ['H', 'partH'],
   },
+
+  // Part H: Security Audits
   {
-    patterns: [/security\s*audit|audit(?:ed)?\s*by/i],
+    sectionNumbers: ['H.9', 'H.10'],
+    patterns: [/security\s*audit|audited\s*by|audit\s*report/i],
     targetPath: 'partH.securityAudits',
-    transform: (v) => [v],
+    transform: (v) => [v], // Return as array
     confidence: 'medium',
-    parts: ['H', 'partH'],
   },
 
   // Part J: Sustainability
   {
-    patterns: [/energy\s*consumption|power\s*consumption/i],
+    sectionNumbers: ['J.1', 'J.2', 'J.3'],
+    patterns: [/energy\s*consumption|power\s*(?:consumption|usage)|kWh/i],
     targetPath: 'partJ.energyConsumption',
     transform: (v) => {
       const num = extractNumber(v);
       return num?.value;
     },
     confidence: 'high',
-    parts: ['J', 'partJ'],
+  },
+  {
+    sectionNumbers: ['J.1', 'J.2'],
+    patterns: [/consensus\s*mechanism\s*type|type\s*of\s*consensus/i],
+    targetPath: 'partJ.consensusMechanismType',
+    confidence: 'medium',
+  },
+  {
+    sectionNumbers: ['J.4', 'J.5'],
+    patterns: [/renewable\s*energy|green\s*energy/i],
+    targetPath: 'partJ.renewableEnergyPercentage',
+    transform: (v) => {
+      const match = v.match(/(\d+(?:\.\d+)?)\s*%/);
+      if (match?.[1]) return parseFloat(match[1]);
+      const num = extractNumber(v);
+      return num?.value;
+    },
+    confidence: 'medium',
   },
 ];
+
+/**
+ * Extract LEI value
+ */
+function extractLEIValue(text: string): string {
+  // First try standard LEI (20 alphanumeric)
+  const lei = extractLEI(text);
+  if (lei?.value) return lei.value;
+
+  // Try Swiss UID format (CHE-XXX.XXX.XXX)
+  const uidMatch = text.match(/CHE[-\s]?\d{3}\.?\d{3}\.?\d{3}/i);
+  if (uidMatch) return uidMatch[0].toUpperCase();
+
+  // Clean up any found identifier
+  const cleanedText = text.replace(/\s/g, '').toUpperCase();
+  if (/^[A-Z0-9]{15,25}$/.test(cleanedText)) {
+    return cleanedText;
+  }
+
+  return text.trim();
+}
 
 /**
  * Extract country code from text
  */
 function extractCountryCode(text: string): string {
-  // Common country name to code mappings
   const countryMap: Record<string, string> = {
     switzerland: 'CH',
+    swiss: 'CH',
     malta: 'MT',
     germany: 'DE',
+    german: 'DE',
     france: 'FR',
+    french: 'FR',
     ireland: 'IE',
+    irish: 'IE',
     netherlands: 'NL',
+    dutch: 'NL',
     luxembourg: 'LU',
     austria: 'AT',
+    austrian: 'AT',
     belgium: 'BE',
+    belgian: 'BE',
     spain: 'ES',
+    spanish: 'ES',
     italy: 'IT',
+    italian: 'IT',
     portugal: 'PT',
+    portuguese: 'PT',
     poland: 'PL',
+    polish: 'PL',
     'united kingdom': 'GB',
     uk: 'GB',
+    british: 'GB',
     'united states': 'US',
     usa: 'US',
+    american: 'US',
+    singapore: 'SG',
+    indonesia: 'ID',
+    indonesian: 'ID',
+    zug: 'CH', // Zug is in Switzerland
   };
 
   const lowerText = text.toLowerCase();
@@ -240,13 +309,13 @@ function extractCountryCode(text: string): string {
     }
   }
 
-  // Check if it's already a 2-letter code
+  // Check for 2-letter code
   const codeMatch = text.match(/\b([A-Z]{2})\b/);
-  if (codeMatch) {
-    return codeMatch[1] || text;
+  if (codeMatch?.[1]) {
+    return codeMatch[1];
   }
 
-  return text;
+  return text.slice(0, 2).toUpperCase();
 }
 
 /**
@@ -255,7 +324,13 @@ function extractCountryCode(text: string): string {
 function extractUrl(text: string): string | undefined {
   const urlPattern = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/i;
   const match = text.match(urlPattern);
-  return match ? match[0] : undefined;
+  if (match) return match[0];
+
+  // Try to find domain-like patterns
+  const domainMatch = text.match(/(?:www\.)?[a-z0-9-]+(?:\.[a-z]{2,})+/i);
+  if (domainMatch) return `https://${domainMatch[0]}`;
+
+  return undefined;
 }
 
 /**
@@ -264,19 +339,67 @@ function extractUrl(text: string): string | undefined {
 function extractEmail(text: string): string | undefined {
   const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
   const match = text.match(emailPattern);
-  return match ? match[0] : undefined;
+  return match ? match[0].toLowerCase() : undefined;
 }
 
 /**
- * Check if text matches any pattern in the list
+ * Extract date value in ISO format
  */
-function matchesPatterns(text: string, patterns: (RegExp | string)[]): boolean {
-  return patterns.some((pattern) => {
-    if (typeof pattern === 'string') {
-      return text.toLowerCase().includes(pattern.toLowerCase());
+function extractDateValue(text: string): string | undefined {
+  // Try ISO format first
+  const isoMatch = text.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) return isoMatch[0];
+
+  // Try "December 17, 2025" format
+  const monthNameMatch = text.match(/(\w+)\s+(\d{1,2}),?\s+(\d{4})/);
+  if (monthNameMatch) {
+    const date = new Date(monthNameMatch[0]);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0];
     }
-    return pattern.test(text);
-  });
+  }
+
+  // Try "17 December 2025" format
+  const dayFirstMatch = text.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/);
+  if (dayFirstMatch) {
+    const date = new Date(dayFirstMatch[0]);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0];
+    }
+  }
+
+  // Try to extract from extractDate helper
+  const extracted = extractDate(text);
+  return extracted?.date;
+}
+
+/**
+ * Extract total supply value
+ */
+function extractTotalSupply(text: string): number | undefined {
+  // Handle "10 million", "10M", "10,000,000"
+  const millionMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:million|M\b)/i);
+  if (millionMatch?.[1]) {
+    return parseFloat(millionMatch[1]) * 1_000_000;
+  }
+
+  const billionMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:billion|B\b)/i);
+  if (billionMatch?.[1]) {
+    return parseFloat(billionMatch[1]) * 1_000_000_000;
+  }
+
+  const thousandMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:thousand|K\b)/i);
+  if (thousandMatch?.[1]) {
+    return parseFloat(thousandMatch[1]) * 1_000;
+  }
+
+  // Plain number with commas
+  const numMatch = text.match(/([\d,]+)/);
+  if (numMatch?.[1]) {
+    return parseInt(numMatch[1].replace(/,/g, ''), 10);
+  }
+
+  return undefined;
 }
 
 /**
@@ -303,14 +426,79 @@ function setNestedValue(obj: Record<string, unknown>, path: string, value: unkno
 }
 
 /**
+ * Extract content for a specific MiCA section number
+ */
+function extractSectionContent(text: string, sectionNum: string): string | null {
+  // Pattern to find section like "A.1" or "E.28" followed by content
+  const escapedSection = sectionNum.replace('.', '\\.');
+
+  const patterns = [
+    // "A.1    Field Name    Value" - table format with multiple spaces/tabs
+    new RegExp(`\\b${escapedSection}\\s{2,}[\\w-]+(?:\\s+[\\w-]+)*\\s{2,}([^\\n]+)`, 'i'),
+    // "A.1 Field Name\nContent" or "A.1: Content"
+    new RegExp(`\\b${escapedSection}[.:\\s]+([\\s\\S]*?)(?=\\n[A-Z]\\.\\d|$)`, 'i'),
+    // Section in table format with pipe or colon
+    new RegExp(`${escapedSection}\\s*[|:]\\s*([^\\n]+)`, 'i'),
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      // Clean up the extracted content
+      let content = match[1].trim();
+      // Limit to reasonable length for single-line fields
+      if (content.length > 2000) {
+        content = content.slice(0, 2000);
+      }
+      if (content.length > 0) {
+        return content;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract multi-line content between sections
+ */
+function extractMultiLineContent(text: string, sectionNums: string[]): string | null {
+  for (const sectionNum of sectionNums) {
+    // Find start of section
+    const startPattern = new RegExp(`\\b${sectionNum.replace('.', '\\.')}[.:\\s]`, 'i');
+    const startMatch = text.match(startPattern);
+
+    if (startMatch && startMatch.index !== undefined) {
+      const startPos = startMatch.index + startMatch[0].length;
+      // Find next section (A-J followed by number)
+      const nextSectionMatch = text.slice(startPos).match(/\n[A-J]\.\d+[\s.:]/);
+      const endPos = nextSectionMatch?.index
+        ? startPos + nextSectionMatch.index
+        : Math.min(startPos + 3000, text.length);
+
+      let content = text.slice(startPos, endPos).trim();
+
+      // Clean up the content
+      content = content
+        .replace(/^\s*\n/, '') // Remove leading newlines
+        .replace(/\n{3,}/g, '\n\n') // Collapse multiple newlines
+        .trim();
+
+      if (content.length > 50) {
+        return content;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Map extraction result to whitepaper fields
  */
 export interface MappingResult {
-  /** Partially filled whitepaper data */
   data: Partial<WhitepaperData>;
-  /** Mapping details */
   mappings: MappedField[];
-  /** Confidence summary */
   confidence: {
     overall: number;
     bySection: Record<string, number>;
@@ -329,95 +517,120 @@ export function mapPdfToWhitepaper(
   const mappings: MappedField[] = [];
   const confidenceScores: Record<string, number[]> = {};
 
-  // Process each section
-  for (const [sectionName, sectionContent] of extraction.sections) {
-    // Extract table rows from section
-    const rows = extractTableRows(sectionContent);
+  const fullText = extraction.text;
 
-    // Map table rows
-    for (const row of rows) {
-      for (const mapping of FIELD_MAPPINGS) {
-        // Check if this mapping applies to this section
-        if (mapping.parts && !mapping.parts.some((p) => sectionName.includes(p))) {
-          continue;
+  // First pass: Extract by section numbers
+  for (const mapping of MICA_SECTION_MAPPINGS) {
+    // Skip if already mapped
+    if (mappings.some((m) => m.path === mapping.targetPath)) continue;
+
+    // Try section numbers first
+    for (const sectionNum of mapping.sectionNumbers) {
+      let content: string | null = null;
+
+      if (mapping.multiLine) {
+        content = extractMultiLineContent(fullText, [sectionNum]);
+      } else {
+        content = extractSectionContent(fullText, sectionNum);
+      }
+
+      if (content && content.length > 2) {
+        const value = mapping.transform ? mapping.transform(content, fullText) : content;
+
+        if (value !== undefined && value !== null && value !== '') {
+          setNestedValue(data, mapping.targetPath, value);
+
+          const confidenceValue =
+            mapping.confidence === 'high' ? 0.9 : mapping.confidence === 'medium' ? 0.7 : 0.5;
+
+          mappings.push({
+            path: mapping.targetPath,
+            value,
+            source: `Section ${sectionNum}`,
+            confidence: mapping.confidence,
+          });
+
+          const section = mapping.targetPath.split('.')[0] || 'unknown';
+          if (!confidenceScores[section]) {
+            confidenceScores[section] = [];
+          }
+          confidenceScores[section].push(confidenceValue);
+
+          break; // Found a match, move to next mapping
+        }
+      }
+    }
+  }
+
+  // Second pass: Use patterns for anything not found
+  for (const mapping of MICA_SECTION_MAPPINGS) {
+    if (mappings.some((m) => m.path === mapping.targetPath)) continue;
+
+    for (const pattern of mapping.patterns) {
+      const match = fullText.match(pattern);
+      if (match && match.index !== undefined) {
+        // Extract content after the match
+        const afterMatch = fullText.slice(match.index + match[0].length);
+
+        // Get the next meaningful content
+        let content: string;
+        if (mapping.multiLine) {
+          // Get multiple lines until next section or limit
+          const endMatch = afterMatch.match(/\n[A-J]\.\d+[\s.:]/);
+          content = afterMatch.slice(0, endMatch?.index || 2000).trim();
+        } else {
+          // Get the rest of the line, stopping at next numbered item or newline
+          const lineEnd = afterMatch.search(/\n\d+\.\s|\n[A-J]\.\d|$/);
+          const firstLine = afterMatch.slice(0, lineEnd === -1 ? undefined : lineEnd);
+          content = firstLine.trim().slice(0, 500);
         }
 
-        if (matchesPatterns(row.field, mapping.patterns)) {
-          const value = mapping.transform ? mapping.transform(row.content) : row.content;
+        // Clean up common prefixes
+        content = content
+          .replace(/^[:\s]+/, '')
+          .replace(/^(is|are|the|a|an)\s+/i, '')
+          .trim();
+
+        if (content.length > 2) {
+          const value = mapping.transform ? mapping.transform(content, fullText) : content;
 
           if (value !== undefined && value !== null && value !== '') {
             setNestedValue(data, mapping.targetPath, value);
 
-            const confidenceValue =
+            const baseConfidence =
               mapping.confidence === 'high' ? 0.9 : mapping.confidence === 'medium' ? 0.7 : 0.5;
+            const adjustedConfidence = baseConfidence * 0.7; // Lower for pattern match
 
             mappings.push({
               path: mapping.targetPath,
               value,
-              source: `${sectionName}: ${row.field}`,
-              confidence: mapping.confidence,
+              source: `Pattern: ${pattern.source.slice(0, 30)}`,
+              confidence: adjustedConfidence < 0.6 ? 'low' : mapping.confidence,
             });
 
-            // Track confidence by section
             const section = mapping.targetPath.split('.')[0] || 'unknown';
             if (!confidenceScores[section]) {
               confidenceScores[section] = [];
             }
-            confidenceScores[section].push(confidenceValue);
+            confidenceScores[section].push(adjustedConfidence);
+
+            break;
           }
         }
       }
     }
+  }
 
-    // Also try to extract from raw section content for fields not in tables
-    for (const mapping of FIELD_MAPPINGS) {
-      // Skip if already mapped
-      const existingMapping = mappings.find((m) => m.path === mapping.targetPath);
-      if (existingMapping) continue;
-
-      // Check if this mapping applies to this section
-      if (mapping.parts && !mapping.parts.some((p) => sectionName.includes(p))) {
-        continue;
-      }
-
-      // Try to find field label in content
-      for (const pattern of mapping.patterns) {
-        const regex = typeof pattern === 'string' ? new RegExp(pattern, 'i') : pattern;
-        const match = sectionContent.match(regex);
-
-        if (match) {
-          // Try to extract value after the match
-          const afterMatch = sectionContent.slice((match.index || 0) + match[0].length, (match.index || 0) + match[0].length + 500);
-          const lines = afterMatch.split('\n').filter((l) => l.trim());
-
-          if (lines.length > 0 && lines[0]) {
-            const rawValue = lines[0].trim();
-            const value = mapping.transform ? mapping.transform(rawValue) : rawValue;
-
-            if (value !== undefined && value !== null && value !== '') {
-              setNestedValue(data, mapping.targetPath, value);
-
-              // Lower confidence for non-table extraction
-              const baseConfidence =
-                mapping.confidence === 'high' ? 0.9 : mapping.confidence === 'medium' ? 0.7 : 0.5;
-              const adjustedConfidence = baseConfidence * 0.8;
-
-              mappings.push({
-                path: mapping.targetPath,
-                value,
-                source: `${sectionName}: pattern match`,
-                confidence: adjustedConfidence < 0.6 ? 'low' : mapping.confidence,
-              });
-
-              const section = mapping.targetPath.split('.')[0] || 'unknown';
-              if (!confidenceScores[section]) {
-                confidenceScores[section] = [];
-              }
-              confidenceScores[section].push(adjustedConfidence);
-            }
-          }
-        }
-      }
+  // Special handling: Detect public offering from context
+  if (!data.partE || !(data.partE as Record<string, unknown>).isPublicOffering) {
+    if (/public\s*offer|offer\s*to\s*(?:the\s*)?public/i.test(fullText)) {
+      setNestedValue(data, 'partE.isPublicOffering', true);
+      mappings.push({
+        path: 'partE.isPublicOffering',
+        value: true,
+        source: 'Document context',
+        confidence: 'medium',
+      });
     }
   }
 
