@@ -1,4 +1,5 @@
 import { FileUp, CheckCircle, Download, Shield } from 'lucide-react';
+import { UploadZone } from '@/components/upload';
 
 export default function Home() {
   return (
@@ -25,15 +26,8 @@ export default function Home() {
         </p>
 
         {/* Upload Area */}
-        <div className="mx-auto mt-12 max-w-xl">
-          <div className="rounded-lg border-2 border-dashed border-muted-foreground/25 bg-card p-12 transition-colors hover:border-primary/50">
-            <FileUp className="mx-auto h-12 w-12 text-muted-foreground" />
-            <p className="mt-4 text-lg font-medium">Drop your PDF here</p>
-            <p className="mt-1 text-sm text-muted-foreground">or click to browse</p>
-            <p className="mt-4 text-xs text-muted-foreground">
-              Supports PDF whitepapers up to 50MB
-            </p>
-          </div>
+        <div className="mt-12">
+          <UploadZone />
         </div>
       </section>
 
