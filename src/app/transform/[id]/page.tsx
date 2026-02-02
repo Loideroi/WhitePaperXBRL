@@ -385,10 +385,27 @@ export default function TransformPage() {
       setValidationErrors(errors);
       setShowValidation(true);
 
-      return errors.filter((e) => e.severity === 'error').length === 0;
+      const hasErrors = errors.filter((e) => e.severity === 'error').length > 0;
+
+      // Reset button state - validation panel remains visible via showValidation
+      setGenerateState('idle');
+
+      if (hasErrors || errors.length > 0) {
+        // Scroll to validation panel to make results clearly visible
+        setTimeout(() => {
+          document.getElementById('validation-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      }
+
+      return !hasErrors;
     } catch (err) {
       setGenerateError(err instanceof Error ? err.message : 'Validation failed');
       setGenerateState('error');
+      setShowValidation(false);
+      // Scroll to error message
+      setTimeout(() => {
+        document.getElementById('generation-error')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
       return false;
     }
   }, [data, tokenType]);
@@ -399,7 +416,7 @@ export default function TransformPage() {
     const isValid = await handleValidate();
 
     if (!isValid) {
-      setGenerateState('idle');
+      // handleValidate already set appropriate state ('idle' for validation errors, 'error' for exceptions)
       return;
     }
 
@@ -615,30 +632,41 @@ export default function TransformPage() {
         <div className="max-w-3xl mx-auto space-y-6">
           {/* Validation Panel */}
           {showValidation && (
-            <div className="relative">
-              <button
-                onClick={() => setShowValidation(false)}
-                className="absolute top-2 right-2 p-1 rounded hover:bg-muted z-10"
-                aria-label="Close validation"
-              >
-                <X className="h-4 w-4" />
-              </button>
-              <ValidationDashboard
-                errors={validationErrors}
-                isValidating={generateState === 'validating'}
-                onFieldClick={(path) => {
-                  // Scroll to field (simplified for now)
-                  const sectionId = path.split('.')[0];
-                  const element = document.getElementById(sectionId || '');
-                  element?.scrollIntoView({ behavior: 'smooth' });
-                }}
-              />
+            <div id="validation-panel" className="relative rounded-lg border-2 border-yellow-400 bg-yellow-50 dark:bg-yellow-950/20 shadow-md">
+              <div className="flex items-center justify-between px-4 pt-3 pb-1">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-yellow-600" />
+                  <span className="font-semibold text-yellow-800 dark:text-yellow-200">
+                    {validationErrors.filter(e => e.severity === 'error').length > 0
+                      ? `${validationErrors.filter(e => e.severity === 'error').length} validation error(s) must be fixed before generating`
+                      : 'Validation complete'}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowValidation(false)}
+                  className="p-1 rounded hover:bg-yellow-200 dark:hover:bg-yellow-800 z-10"
+                  aria-label="Close validation"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="px-4 pb-3">
+                <ValidationDashboard
+                  errors={validationErrors}
+                  isValidating={generateState === 'validating'}
+                  onFieldClick={(path) => {
+                    const sectionId = path.split('.')[0];
+                    const element = document.getElementById(sectionId || '');
+                    element?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                />
+              </div>
             </div>
           )}
 
           {/* Generation Error */}
           {generateState === 'error' && generateError && (
-            <div className="rounded-lg border border-destructive bg-destructive/10 p-4">
+            <div id="generation-error" className="rounded-lg border-2 border-destructive bg-destructive/10 p-4 shadow-md">
               <div className="flex items-center gap-2">
                 <AlertCircle className="h-5 w-5 text-destructive" />
                 <span className="font-medium text-destructive">Generation Failed</span>
@@ -712,7 +740,7 @@ export default function TransformPage() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => handleValidate().then(() => setGenerateState('idle'))}
+              onClick={() => handleValidate()}
               disabled={generateState === 'generating' || generateState === 'validating'}
               className="px-4 py-2 rounded-lg border border-border bg-background text-foreground font-medium hover:bg-muted transition-colors disabled:opacity-50"
             >
