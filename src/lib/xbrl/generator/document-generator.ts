@@ -29,6 +29,7 @@ import { generateHiddenBlock, type HiddenFactEntry } from './template/hidden-fac
 import { escapeHtml } from './template/inline-tagger';
 import {
   getFieldsForSection,
+  OTHR_FIELD_DEFINITIONS,
 } from './mica-template/field-definitions';
 import {
   getEnumerationUri,
@@ -264,6 +265,36 @@ function mapDataToFactValues(
       taxonomyUri,
       humanReadable,
     });
+  }
+
+  // Fill in from rawFields for any field not already mapped via typed extraction
+  const rawFields = getNestedValue(dataObj, 'rawFields') as Record<string, string> | undefined;
+  if (rawFields) {
+    for (const fieldDef of OTHR_FIELD_DEFINITIONS) {
+      // Skip if already mapped
+      if (values.has(fieldDef.xbrlElement)) continue;
+      // Skip dimensional fields (management body members etc.)
+      if (fieldDef.isDimensional) continue;
+      // Skip enumeration fields (need URI resolution, can't use raw text)
+      if (fieldDef.isHidden) continue;
+
+      // Look up by exact field number
+      let content = rawFields[fieldDef.number];
+
+      // For sub-fields with letter suffix (A.3s, A.12a etc.), try the parent number
+      if (!content && /[a-z]$/.test(fieldDef.number)) {
+        const parentNum = fieldDef.number.replace(/[a-z]$/, '');
+        content = rawFields[parentNum];
+      }
+
+      if (content && content.trim().length > 0) {
+        const ctxRef = fieldDef.periodType === 'instant' ? instantContextId : durationContextId;
+        values.set(fieldDef.xbrlElement, {
+          value: content.trim(),
+          contextRef: ctxRef,
+        });
+      }
+    }
   }
 
   return values;

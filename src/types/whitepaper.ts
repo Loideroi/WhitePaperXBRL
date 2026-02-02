@@ -185,6 +185,12 @@ export const WhitepaperDataSchema = z.object({
       })
     )
     .optional(),
+
+  /**
+   * Raw field content extracted from the PDF, keyed by field number (e.g., "A.1", "E.14", "S.8").
+   * Used as fallback for fields not captured by the typed extraction pipeline.
+   */
+  rawFields: z.record(z.string(), z.string()).optional(),
 });
 
 export type WhitepaperData = z.infer<typeof WhitepaperDataSchema>;

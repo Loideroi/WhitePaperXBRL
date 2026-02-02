@@ -14,6 +14,7 @@ import {
   extractNumber,
   type PdfExtractionResult,
 } from './extractor';
+import { OTHR_FIELD_DEFINITIONS } from '@/lib/xbrl/generator/mica-template/field-definitions';
 
 /**
  * Known blockchain networks for detection
@@ -901,6 +902,86 @@ function extractMultiLineTableContent(text: string, sectionNum: string, fieldNam
 }
 
 /**
+ * Extract ALL numbered field content from the PDF text.
+ *
+ * Iterates through all MiCA field definitions and attempts to extract content
+ * for each numbered field using table content extraction. This captures fields
+ * that aren't covered by the specific typed extraction mappings.
+ *
+ * Returns a Record keyed by field number (e.g., "A.1", "E.14", "S.8").
+ */
+function extractAllRawFields(text: string): Record<string, string> {
+  const rawFields: Record<string, string> = {};
+
+  for (const fieldDef of OTHR_FIELD_DEFINITIONS) {
+    // Skip dimensional fields (management body members etc. - handled separately)
+    if (fieldDef.isDimensional) continue;
+    // Skip sub-fields with letter suffixes (A.3c, A.4c etc. - derived from parent)
+    if (/[a-z]$/.test(fieldDef.number)) continue;
+
+    const fieldNum = fieldDef.number;
+    const label = fieldDef.label;
+
+    // Build alternative labels for more robust matching
+    const labels = [label];
+    // Also try without parenthetical clarifications
+    const shortLabel = label.replace(/\s*\(.*?\)\s*/g, '').trim();
+    if (shortLabel !== label && shortLabel.length > 3) {
+      labels.push(shortLabel);
+    }
+
+    let content: string | null = null;
+
+    // Try multiline extraction first (better for long content / text blocks)
+    if (fieldDef.isTextBlock) {
+      content = extractMultiLineTableContent(text, fieldNum, labels);
+    }
+
+    // Fall back to single-line extraction
+    if (!content || content.length < 2) {
+      content = extractTableContent(text, fieldNum, labels);
+    }
+
+    // Last resort: try matching just by field number with generous content capture
+    if (!content || content.length < 2) {
+      content = extractContentByFieldNumber(text, fieldNum);
+    }
+
+    if (content && content.length > 1) {
+      rawFields[fieldNum] = content;
+    }
+  }
+
+  return rawFields;
+}
+
+/**
+ * Extract content by field number alone, without requiring label matching.
+ * Finds the field number and captures content until the next field number marker.
+ */
+function extractContentByFieldNumber(text: string, fieldNum: string): string | null {
+  const escapedNum = fieldNum.replace('.', '\\.');
+
+  // Match field number at start of line or after whitespace, followed by content
+  const pattern = new RegExp(
+    `(?:^|\\n)\\s*${escapedNum}\\s+(.+?)(?=\\n\\s*(?:[A-J]|S)\\.\\d+\\s|\\n\\s*\\d{2}\\s|$)`,
+    's'
+  );
+
+  const match = text.match(pattern);
+  if (match?.[1]) {
+    const content = match[1]
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+    if (content.length > 1) {
+      return content;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Map extraction result to whitepaper fields
  */
 export interface MappingResult {
@@ -1078,6 +1159,10 @@ export function mapPdfToWhitepaper(
       confidence: 'high',
     });
   }
+
+  // Extract ALL numbered field content as raw text for fields not covered by typed extraction
+  const rawFields = extractAllRawFields(fullText);
+  data.rawFields = rawFields;
 
   return {
     data: data as Partial<WhitepaperData>,
