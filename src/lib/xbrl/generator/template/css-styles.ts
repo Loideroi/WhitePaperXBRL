@@ -15,7 +15,7 @@ export function generateCSSStylesheet(): string {
    A4 page layout with numbered table format
    ============================================================ */
 
-/* Reset & Base */
+/* Reset and Base */
 * {
   margin: 0;
   padding: 0;

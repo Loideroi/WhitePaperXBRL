@@ -493,7 +493,9 @@ export function generateIXBRLDocument(data: Partial<WhitepaperData>): string {
   <meta charset="utf-8" />
   <title>MiCA Crypto-Asset White Paper - ${escapeHtml(data.partD?.cryptoAssetName || 'Unknown')}</title>
   <style type="text/css">
+/* <![CDATA[ */
 ${css}
+/* ]]> */
   </style>
 </head>
 <body>
