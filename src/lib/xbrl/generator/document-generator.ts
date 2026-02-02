@@ -1,207 +1,523 @@
 /**
- * iXBRL Document Generator
+ * Full-Document iXBRL Generator
  *
- * Generates complete Inline XBRL documents from whitepaper data.
+ * Generates a complete MiCA-compliant iXBRL document that IS the whitepaper.
+ * Per ITS (EU) 2024/2984 Article 2: the Inline XBRL instance document
+ * containing the crypto-asset white paper shall be submitted as a single XHTML file.
+ *
+ * Output structure matches the ESMA/SPURS reference pattern:
+ * - Full XHTML document with embedded CSS
+ * - Cover page, table of contents, and MiCA-template numbered tables
+ * - ix:header at end of body with contexts, units, and hidden facts
+ * - Inline XBRL tags wrapping visible content
  */
 
-import type { XBRLContext, XBRLFact, XBRLUnit, IXBRLDocument } from '@/types/xbrl';
+import type { XBRLContext, XBRLUnit, IXBRLDocument } from '@/types/xbrl';
 import type { WhitepaperData } from '@/types/whitepaper';
-import { buildAllContexts } from './context-builder';
-import { buildAllFacts, getRequiredUnits } from './fact-builder';
+import type { WhitepaperPart } from '@/types/taxonomy';
+import { buildAllContexts, getContextId } from './context-builder';
+import { STANDARD_UNITS } from './fact-builder';
+import { generateCSSStylesheet } from './template/css-styles';
+import { renderCoverPage, renderTableOfContents, wrapInPage } from './template/page-layout';
+import {
+  renderSection,
+  renderDimensionalSection,
+  resetFactIdCounter,
+  type FactValue,
+} from './template/section-renderer';
+import { generateHiddenBlock, type HiddenFactEntry } from './template/hidden-facts';
+import { escapeHtml } from './template/inline-tagger';
+import {
+  getFieldsForSection,
+} from './mica-template/field-definitions';
+import {
+  getEnumerationUri,
+  getEnumerationLabel,
+} from './mica-template/enumeration-mappings';
 
 /**
- * XBRL Namespaces
+ * XBRL Namespaces for the document root element
  */
-const NAMESPACES = {
+const NAMESPACES: Record<string, string> = {
   xbrli: 'http://www.xbrl.org/2003/instance',
   ix: 'http://www.xbrl.org/2013/inlineXBRL',
   ixt: 'http://www.xbrl.org/inlineXBRL/transformation/2020-02-12',
+  ixt4: 'http://www.xbrl.org/inlineXBRL/transformation/2020-02-12',
   link: 'http://www.xbrl.org/2003/linkbase',
   xlink: 'http://www.w3.org/1999/xlink',
-  mica: 'https://www.esma.europa.eu/taxonomy/2025-03-31/mica',
+  xbrldi: 'http://xbrl.org/2006/xbrldi',
+  mica: 'https://www.esma.europa.eu/taxonomy/2025-03-31/mica/',
   iso4217: 'http://www.xbrl.org/2003/iso4217',
+  utr: 'http://www.xbrl.org/2009/utr',
 };
 
 /**
- * Taxonomy reference URL
+ * Taxonomy reference - specific OTHR entry point
  */
-const TAXONOMY_REF = 'https://www.esma.europa.eu/taxonomy/2025-03-31/mica/mica-2025-03-31.xsd';
+const TAXONOMY_REF = 'https://www.esma.europa.eu/taxonomy/2025-03-31/mica/mica_entry_table_2.xsd';
 
 /**
- * Escape HTML special characters
+ * Map whitepaper data to fact values for each field definition.
+ * Returns a Map keyed by xbrlElement name.
  */
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+function mapDataToFactValues(
+  data: Partial<WhitepaperData>,
+  durationContextId: string,
+  instantContextId: string
+): Map<string, FactValue> {
+  const values = new Map<string, FactValue>();
+  const dataObj = data as Record<string, unknown>;
+
+  // Helper to resolve nested data paths
+  function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+    const parts = path.split('.');
+    let current: unknown = obj;
+    for (const part of parts) {
+      if (current === null || current === undefined) return undefined;
+      if (typeof current !== 'object') return undefined;
+      current = (current as Record<string, unknown>)[part];
+    }
+    return current;
+  }
+
+  // Map data fields to their XBRL elements
+  // Part A mappings
+  setValueIfPresent('mica:NameOfOtherTokenOfferor', getNestedValue(dataObj, 'partA.legalName'));
+  setValueIfPresent('mica:OfferorsLegalEntityIdentifier', getNestedValue(dataObj, 'partA.lei'));
+  setValueIfPresent('mica:OfferorsRegisteredAddress', getNestedValue(dataObj, 'partA.registeredAddress'));
+  setValueIfPresent('mica:OfferorsEmailAddress', getNestedValue(dataObj, 'partA.contactEmail'));
+  setValueIfPresent('mica:OfferorsContactTelephoneNumber', getNestedValue(dataObj, 'partA.contactPhone'));
+  setValueIfPresent('mica:OtherTokenIssuersWebsite', getNestedValue(dataObj, 'partA.website'));
+
+  // Map country to enumeration
+  const country = getNestedValue(dataObj, 'partA.country') as string | undefined;
+  if (country) {
+    const countryUri = getEnumerationUri('mica:OfferorsRegisteredCountry', country);
+    if (countryUri) {
+      setEnumValue('mica:OfferorsRegisteredCountry', country, countryUri,
+        getEnumerationLabel('mica:OfferorsRegisteredCountry', country) || country);
+    }
+  }
+
+  // Part B mappings
+  if (data.partB) {
+    setValueIfPresent('mica:IssuerDifferentFromOfferrorOrPersonSeekingAdmissionToTrading', 'true');
+    setValueIfPresent('mica:NameOfOtherTokenIssuer', getNestedValue(dataObj, 'partB.legalName'));
+    setValueIfPresent('mica:IssuersLegalEntityIdentifier', getNestedValue(dataObj, 'partB.lei'));
+    setValueIfPresent('mica:IssuersRegisteredAddress', getNestedValue(dataObj, 'partB.registeredAddress'));
+  }
+
+  // Part C mappings
+  if (data.partC) {
+    setValueIfPresent('mica:NameOfOtherTokenOperator', getNestedValue(dataObj, 'partC.legalName'));
+    setValueIfPresent('mica:OperatorsLegalEntityIdentifier', getNestedValue(dataObj, 'partC.lei'));
+    setValueIfPresent('mica:OperatorsRegisteredAddress', getNestedValue(dataObj, 'partC.registeredAddress'));
+  }
+
+  // Part D mappings
+  setValueIfPresent('mica:NameOfOtherTokenProject', getNestedValue(dataObj, 'partD.cryptoAssetName'));
+  setValueIfPresent('mica:NameOfOtherToken', getNestedValue(dataObj, 'partD.cryptoAssetName'));
+  setValueIfPresent('mica:OtherTokenProjectAbbreviation', getNestedValue(dataObj, 'partD.cryptoAssetSymbol'));
+  setValueIfPresent('mica:DescriptionOfOtherTokenProjectExplanatory', getNestedValue(dataObj, 'partD.projectDescription'));
+
+  // Part E mappings
+  const isPublicOffering = getNestedValue(dataObj, 'partE.isPublicOffering');
+  if (isPublicOffering !== undefined) {
+    const offerKey = isPublicOffering ? 'publicOffering' : 'admissionToTrading';
+    const uri = getEnumerationUri('mica:PublicOfferingOrAdmissionToTrading', offerKey);
+    const label = getEnumerationLabel('mica:PublicOfferingOrAdmissionToTrading', offerKey);
+    if (uri && label) {
+      setEnumValue('mica:PublicOfferingOrAdmissionToTrading', offerKey, uri, label);
+    }
+  }
+
+  setValueIfPresent('mica:SubscriptionPeriodBeginning', getNestedValue(dataObj, 'partE.publicOfferingStartDate'), 'instant');
+  setValueIfPresent('mica:SubscriptionPeriodEnd', getNestedValue(dataObj, 'partE.publicOfferingEndDate'), 'instant');
+
+  const tokenPrice = getNestedValue(dataObj, 'partE.tokenPrice');
+  if (tokenPrice !== undefined && tokenPrice !== null) {
+    const currency = (getNestedValue(dataObj, 'partE.tokenPriceCurrency') as string) || 'USD';
+    values.set('mica:IssuePrice', {
+      value: String(tokenPrice),
+      contextRef: durationContextId,
+      unitRef: `unit_${currency}`,
+      decimals: 2,
+    });
+    // Set the currency enumeration
+    const currUri = getEnumerationUri('mica:OfficialCurrencyDeterminingIssuePrice', currency);
+    if (currUri) {
+      setEnumValue('mica:OfficialCurrencyDeterminingIssuePrice', currency, currUri,
+        getEnumerationLabel('mica:OfficialCurrencyDeterminingIssuePrice', currency) || currency);
+    }
+  }
+
+  const maxSubscription = getNestedValue(dataObj, 'partE.maxSubscriptionGoal');
+  if (maxSubscription !== undefined && maxSubscription !== null) {
+    const currency = (getNestedValue(dataObj, 'partE.tokenPriceCurrency') as string) || 'USD';
+    values.set('mica:MaximumSubscriptionGoalsExpressedInCurrency', {
+      value: String(maxSubscription),
+      contextRef: durationContextId,
+      unitRef: `unit_${currency}`,
+      decimals: 0,
+    });
+  }
+
+  const totalSupply = getNestedValue(dataObj, 'partD.totalSupply');
+  if (totalSupply !== undefined && totalSupply !== null) {
+    values.set('mica:TotalNumberOfOfferedOrTradedOtherTokens', {
+      value: String(Math.round(Number(totalSupply))),
+      contextRef: instantContextId,
+      unitRef: 'unit_pure',
+      decimals: 0,
+    });
+  }
+
+  const withdrawalRights = getNestedValue(dataObj, 'partE.withdrawalRights');
+  if (withdrawalRights !== undefined) {
+    setValueIfPresent('mica:RighOfWithdrawalExplanatory',
+      withdrawalRights ? 'The purchaser has a right of withdrawal within 14 calendar days.' : 'No right of withdrawal.');
+  }
+
+  // Part F mappings
+  setValueIfPresent('mica:OtherTokenType', getNestedValue(dataObj, 'partD.tokenStandard'));
+  setValueIfPresent('mica:DescriptionOfOtherTokenCharacteristicsExplanatory', getNestedValue(dataObj, 'partF.classification'));
+  setValueIfPresent('mica:InformationAboutLanguagesUsedInOtherTokenWhitePaper', data.language || 'en');
+
+  // Part G mappings
+  setValueIfPresent('mica:InformationAboutPurchaserRightsAndObligationsExplanatory', getNestedValue(dataObj, 'partG.purchaseRights'));
+  setValueIfPresent('mica:OtherTokensTransferRestrictionsExplanatory', getNestedValue(dataObj, 'partG.transferRestrictions'));
+  setValueIfPresent('mica:SupplyAdjustmentMechanismsExplanatory', getNestedValue(dataObj, 'partG.dynamicSupplyMechanism'));
+
+  // Part H mappings
+  setValueIfPresent('mica:DistributedLedgerTechnologyForOtherTokenExplanatory', getNestedValue(dataObj, 'partH.blockchainDescription'));
+  setValueIfPresent('mica:ProtocolsAndTechnicalStandardsForOtherTokenExplanatory', getNestedValue(dataObj, 'partH.smartContractInfo'));
+  setValueIfPresent('mica:ConsensusMechanismForOtherTokenExplanatory', getNestedValue(dataObj, 'partD.consensusMechanism'));
+  setValueIfPresent('mica:UseOfDistributedLedgerTechnologyIndicatorForOtherToken', 'true');
+
+  const hasAudits = (data.partH?.securityAudits?.length ?? 0) > 0;
+  if (hasAudits) {
+    setValueIfPresent('mica:AuditIndicatorForOtherToken', 'true');
+    setValueIfPresent('mica:AuditOutcomeForOtherTokenExplanatory',
+      data.partH?.securityAudits?.join('; '));
+  }
+
+  // Part I mappings
+  const partI = data.partI;
+  if (partI) {
+    setValueIfPresent('mica:DescriptionOfOfferrelatedRisksForOtherTokenExplanatory',
+      partI.offerRisks?.join('\n\n'));
+    setValueIfPresent('mica:DescriptionOfIssuerrelatedRisksForOtherTokenExplanatory',
+      partI.issuerRisks?.join('\n\n'));
+    setValueIfPresent('mica:OtherTokensrelatedRisksExplanatory',
+      partI.marketRisks?.join('\n\n'));
+    setValueIfPresent('mica:DescriptionOfTechnologyrelatedRisksForOtherTokenExplanatory',
+      partI.technologyRisks?.join('\n\n'));
+    setValueIfPresent('mica:ProjectImplementationrelatedRisksExplanatory',
+      partI.regulatoryRisks?.join('\n\n'));
+  }
+
+  // Part J / Sustainability mappings
+  setValueIfPresent('mica:InformationOnAdverseImpactsOnClimateAndOtherEnvironmentrelatedAdverseImpactsForOtherTokenTokenExplanatory',
+    getNestedValue(dataObj, 'partJ.consensusMechanismType'));
+  setValueIfPresent('mica:ConsensusMechanismSustainabilityExplanatory',
+    getNestedValue(dataObj, 'partJ.consensusMechanismType'));
+
+  const energyConsumption = getNestedValue(dataObj, 'partJ.energyConsumption');
+  if (energyConsumption !== undefined && energyConsumption !== null) {
+    setValueIfPresent('mica:EnergyConsumption', `${energyConsumption} kWh`);
+  }
+
+  const renewablePercent = getNestedValue(dataObj, 'partJ.renewableEnergyPercentage');
+  if (renewablePercent !== undefined && renewablePercent !== null) {
+    values.set('mica:RenewableEnergyConsumptionPercentage', {
+      value: String(renewablePercent),
+      contextRef: durationContextId,
+      unitRef: 'unit_pure',
+      decimals: 2,
+    });
+  }
+
+  // Helper function to set a value
+  function setValueIfPresent(
+    element: string,
+    value: unknown,
+    periodOverride?: 'instant' | 'duration'
+  ): void {
+    if (value === undefined || value === null || value === '') return;
+    const ctxRef = periodOverride === 'instant' ? instantContextId : durationContextId;
+    values.set(element, {
+      value: String(value),
+      contextRef: ctxRef,
+    });
+  }
+
+  // Helper function to set an enumeration value
+  function setEnumValue(
+    element: string,
+    key: string,
+    taxonomyUri: string,
+    humanReadable: string
+  ): void {
+    values.set(element, {
+      value: key,
+      contextRef: durationContextId,
+      taxonomyUri,
+      humanReadable,
+    });
+  }
+
+  return values;
 }
 
 /**
- * Generate XML for a context
+ * Render XML for a context element
  */
-function renderContext(context: XBRLContext): string {
+function renderContextXml(context: XBRLContext): string {
   let periodXml: string;
 
   if ('instant' in context.period) {
     periodXml = `<xbrli:instant>${context.period.instant}</xbrli:instant>`;
   } else {
     periodXml = `
-        <xbrli:startDate>${context.period.startDate}</xbrli:startDate>
-        <xbrli:endDate>${context.period.endDate}</xbrli:endDate>`;
+          <xbrli:startDate>${context.period.startDate}</xbrli:startDate>
+          <xbrli:endDate>${context.period.endDate}</xbrli:endDate>`;
   }
 
   let scenarioXml = '';
   if (context.scenario) {
     if (context.scenario.explicitMember) {
       scenarioXml = `
-      <xbrli:scenario>
-        <xbrldi:explicitMember dimension="${context.scenario.explicitMember.dimension}">${context.scenario.explicitMember.value}</xbrldi:explicitMember>
-      </xbrli:scenario>`;
+        <xbrli:scenario>
+          <xbrldi:explicitMember dimension="${context.scenario.explicitMember.dimension}">${context.scenario.explicitMember.value}</xbrldi:explicitMember>
+        </xbrli:scenario>`;
     } else if (context.scenario.typedMember) {
       scenarioXml = `
-      <xbrli:scenario>
-        <xbrldi:typedMember dimension="${context.scenario.typedMember.dimension}">
-          <mica:value>${escapeHtml(context.scenario.typedMember.value)}</mica:value>
-        </xbrldi:typedMember>
-      </xbrli:scenario>`;
+        <xbrli:scenario>
+          <xbrldi:typedMember dimension="${context.scenario.typedMember.dimension}">
+            <mica:value>${escapeHtml(context.scenario.typedMember.value)}</mica:value>
+          </xbrldi:typedMember>
+        </xbrli:scenario>`;
     }
   }
 
   return `
-    <xbrli:context id="${context.id}">
-      <xbrli:entity>
-        <xbrli:identifier scheme="${context.entity.scheme}">${context.entity.identifier}</xbrli:identifier>
-      </xbrli:entity>
-      <xbrli:period>${periodXml}
-      </xbrli:period>${scenarioXml}
-    </xbrli:context>`;
+        <xbrli:context id="${context.id}">
+          <xbrli:entity>
+            <xbrli:identifier scheme="${context.entity.scheme}">${context.entity.identifier}</xbrli:identifier>
+          </xbrli:entity>
+          <xbrli:period>${periodXml}
+          </xbrli:period>${scenarioXml}
+        </xbrli:context>`;
 }
 
 /**
- * Generate XML for a unit
+ * Render XML for a unit element
  */
-function renderUnit(unit: XBRLUnit): string {
+function renderUnitXml(unit: XBRLUnit): string {
   return `
-    <xbrli:unit id="${unit.id}">
-      <xbrli:measure>${unit.measure}</xbrli:measure>
-    </xbrli:unit>`;
+        <xbrli:unit id="${unit.id}">
+          <xbrli:measure>${unit.measure}</xbrli:measure>
+        </xbrli:unit>`;
 }
 
 /**
- * Render a fact as Inline XBRL element
+ * Determine which units are used based on fact values
  */
-function renderFact(fact: XBRLFact): string {
-  const idAttr = fact.id ? ` id="${fact.id}"` : '';
-  const unitAttr = fact.unitRef ? ` unitRef="${fact.unitRef}"` : '';
-  const decimalsAttr = fact.decimals !== undefined ? ` decimals="${fact.decimals}"` : '';
-  const escapeAttr = fact.escape !== undefined ? ` escape="${fact.escape}"` : '';
-
-  // Determine if it's a numeric or non-numeric fact
-  const isNumeric = fact.unitRef !== undefined;
-
-  if (isNumeric) {
-    // Use ix:nonFraction for numeric values
-    return `<ix:nonFraction${idAttr} name="${fact.name}" contextRef="${fact.contextRef}"${unitAttr}${decimalsAttr} format="ixt:num-dot-decimal">${fact.value}</ix:nonFraction>`;
-  } else {
-    // Use ix:nonNumeric for text values
-    const value = fact.escape ? escapeHtml(String(fact.value)) : String(fact.value);
-    return `<ix:nonNumeric${idAttr} name="${fact.name}" contextRef="${fact.contextRef}"${escapeAttr}>${value}</ix:nonNumeric>`;
+function getUsedUnits(values: Map<string, FactValue>): XBRLUnit[] {
+  const usedUnitIds = new Set<string>();
+  for (const factValue of values.values()) {
+    if (factValue.unitRef) {
+      usedUnitIds.add(factValue.unitRef);
+    }
   }
+  return STANDARD_UNITS.filter(u => usedUnitIds.has(u.id));
 }
 
 /**
- * Generate the complete iXBRL document
+ * Generate the complete iXBRL document.
+ *
+ * This produces the full MiCA-template whitepaper as a single XHTML file
+ * with inline XBRL tags embedded in the visible content.
  */
 export function generateIXBRLDocument(data: Partial<WhitepaperData>): string {
+  // Reset fact counter for deterministic output
+  resetFactIdCounter();
+
   // Build contexts
   const contexts = buildAllContexts(data);
+  const durationCtxId = getContextId('duration');
+  const instantCtxId = getContextId('instant');
 
-  // Build facts
-  const facts = buildAllFacts(data);
+  // Map data to fact values
+  const factValues = mapDataToFactValues(data, durationCtxId, instantCtxId);
 
-  // Get required units
-  const units = getRequiredUnits(facts);
+  // Collect hidden facts (enumerations)
+  const hiddenFacts: HiddenFactEntry[] = [];
 
-  // Render hidden XBRL header block
-  const contextsXml = contexts.map(renderContext).join('\n');
-  const unitsXml = units.map(renderUnit).join('\n');
+  // Determine which units are needed
+  const units = getUsedUnits(factValues);
 
-  // Group facts by section for readable output
-  const factsBySection = groupFactsBySection(facts);
+  // Determine which sections have content
+  const allSections: (WhitepaperPart | 'summary' | 'S')[] = [
+    'summary', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'S',
+  ];
+
+  // Render all section content
+  const sectionPages: string[] = [];
+
+  for (const sectionKey of allSections) {
+    const fields = getFieldsForSection(sectionKey);
+    if (fields.length === 0) continue;
+
+    const sectionHtml = renderSection(sectionKey, fields, factValues, hiddenFacts);
+
+    // Render dimensional tables for this section
+    let dimensionalHtml = '';
+
+    if (sectionKey === 'A' && data.managementBodyMembers?.offeror?.length) {
+      dimensionalHtml += renderDimensionalSection(
+        'Offeror Management Body Members',
+        data.managementBodyMembers.offeror.map((m, i) => ({
+          identity: m.identity,
+          businessAddress: m.businessAddress,
+          functionOrType: m.function,
+          contextRef: getContextId('management', i, 'offeror'),
+        })),
+        {
+          identityElement: 'mica:IdentityOfOfferorsManagementBodyMemberForOtherToken',
+          addressElement: 'mica:BusinessAddressOfOfferorsManagementBodyMemberForOtherToken',
+          functionElement: 'mica:FunctionOfOfferorsManagementBodyMemberForOtherToken',
+        },
+        hiddenFacts
+      );
+    }
+
+    if (sectionKey === 'B' && data.managementBodyMembers?.issuer?.length) {
+      dimensionalHtml += renderDimensionalSection(
+        'Issuer Management Body Members',
+        data.managementBodyMembers.issuer.map((m, i) => ({
+          identity: m.identity,
+          businessAddress: m.businessAddress,
+          functionOrType: m.function,
+          contextRef: getContextId('management', i, 'issuer'),
+        })),
+        {
+          identityElement: 'mica:IdentityOfIssuersManagementBodyMemberForOtherToken',
+          addressElement: 'mica:BusinessAddressOfIssuersManagementBodyMemberForOtherToken',
+          functionElement: 'mica:FunctionOfIssuersManagementBodyMemberForOtherToken',
+        },
+        hiddenFacts
+      );
+    }
+
+    if (sectionKey === 'C') {
+      if (data.managementBodyMembers?.operator?.length) {
+        dimensionalHtml += renderDimensionalSection(
+          'Operator Management Body Members',
+          data.managementBodyMembers.operator.map((m, i) => ({
+            identity: m.identity,
+            businessAddress: m.businessAddress,
+            functionOrType: m.function,
+            contextRef: getContextId('management', i, 'operator'),
+          })),
+          {
+            identityElement: 'mica:IdentityOfOperatorsManagementBodyMemberForOtherToken',
+            addressElement: 'mica:BusinessAddressOfOperatorsManagementBodyMemberForOtherToken',
+            functionElement: 'mica:FunctionOfOperatorsManagementBodyMemberForOtherToken',
+          },
+          hiddenFacts
+        );
+      }
+
+      if (data.projectPersons?.length) {
+        dimensionalHtml += renderDimensionalSection(
+          'Persons Involved in Implementation',
+          data.projectPersons.map((p, i) => ({
+            identity: p.identity,
+            businessAddress: p.businessAddress,
+            functionOrType: p.role,
+            contextRef: getContextId('person_involved', i),
+          })),
+          {
+            identityElement: 'mica:NameOfPersonInvolvedInImplementationOfOtherToken',
+            addressElement: 'mica:BusinessAddressOfPersonInvolvedInImplementationOfOtherToken',
+            functionElement: 'mica:TypeOfPersonInvolvedInImplementationOfOtherToken',
+          },
+          hiddenFacts
+        );
+      }
+    }
+
+    sectionPages.push(wrapInPage(
+      sectionHtml + dimensionalHtml,
+      `section-${sectionKey}`
+    ));
+  }
 
   // Generate namespace declarations
   const nsDeclarations = Object.entries(NAMESPACES)
     .map(([prefix, uri]) => `xmlns:${prefix}="${uri}"`)
     .join('\n    ');
 
-  // Build the document
-  const document = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html>
+  // Generate contexts XML
+  const contextsXml = contexts.map(renderContextXml).join('\n');
+
+  // Generate units XML
+  const unitsXml = units.map(renderUnitXml).join('\n');
+
+  // Generate hidden facts block
+  const hiddenBlockXml = generateHiddenBlock(hiddenFacts);
+
+  // Generate cover page
+  const coverPage = renderCoverPage({
+    projectName: data.partD?.cryptoAssetName || 'Crypto-Asset',
+    cryptoAssetName: data.partD?.cryptoAssetName || 'Unknown Token',
+    symbol: data.partD?.cryptoAssetSymbol || '???',
+    offerorName: data.partA?.legalName || 'Unknown Offeror',
+    documentDate: data.documentDate || new Date().toISOString().split('T')[0] || '',
+    language: data.language || 'en',
+  });
+
+  // Generate table of contents
+  const tocPage = renderTableOfContents(allSections);
+
+  // Generate CSS
+  const css = generateCSSStylesheet();
+
+  // Assemble the complete document
+  const document = `<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"
-    xmlns:xbrldi="http://xbrl.org/2006/xbrldi"
     ${nsDeclarations}
-    lang="${data.language || 'en'}">
+    xml:lang="${data.language || 'en'}">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8" />
   <title>MiCA Crypto-Asset White Paper - ${escapeHtml(data.partD?.cryptoAssetName || 'Unknown')}</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      line-height: 1.6;
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 2rem;
-      color: #1a1a1a;
-    }
-    h1, h2, h3 { color: #003366; }
-    .ix-hidden { display: none; }
-    .section { margin-bottom: 2rem; }
-    .field { margin-bottom: 1rem; }
-    .field-label { font-weight: 600; color: #666; }
-    .field-value { margin-left: 0.5rem; }
-    table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-    th, td { border: 1px solid #ddd; padding: 0.75rem; text-align: left; }
-    th { background: #f5f5f5; }
-    .disclaimer { background: #fff3cd; padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+  <style type="text/css">
+${css}
   </style>
 </head>
 <body>
-  <!-- Hidden XBRL Header Block -->
-  <div class="ix-hidden">
+
+${coverPage}
+
+${tocPage}
+
+${sectionPages.join('\n')}
+
+  <!-- ix:header at END of body (ESMA placement pattern) -->
+  <div style="display:none">
     <ix:header>
+${hiddenBlockXml}
       <ix:references>
-        <link:schemaRef xlink:type="simple" xlink:href="${TAXONOMY_REF}" />
+        <link:schemaRef xlink:href="${TAXONOMY_REF}" xlink:type="simple" />
       </ix:references>
       <ix:resources>
-        ${contextsXml}
-        ${unitsXml}
+${contextsXml}
+${unitsXml}
       </ix:resources>
     </ix:header>
   </div>
 
-  <!-- Document Content -->
-  <header>
-    <h1>Crypto-Asset White Paper</h1>
-    <p>Pursuant to Regulation (EU) 2023/1114 (MiCA)</p>
-  </header>
-
-  <div class="disclaimer">
-    <strong>Important Notice:</strong> This crypto-asset white paper has not been approved by any competent authority in any Member State of the European Union. The offeror of the crypto-asset is solely responsible for the content of this crypto-asset white paper.
-  </div>
-
-  ${renderSection('Part A: Information about the Offeror', factsBySection.partA || [])}
-  ${renderSection('Part D: Information about the Crypto-Asset', factsBySection.partD || [])}
-  ${renderSection('Part E: Information about the Offer to the Public', factsBySection.partE || [])}
-  ${renderSection('Part H: Information on the Underlying Technology', factsBySection.partH || [])}
-  ${renderSection('Part J: Information on Sustainability', factsBySection.partJ || [])}
-
-  <footer>
-    <p><small>Document generated on ${data.documentDate || new Date().toISOString().split('T')[0]}</small></p>
-  </footer>
 </body>
 </html>`;
 
@@ -209,94 +525,26 @@ export function generateIXBRLDocument(data: Partial<WhitepaperData>): string {
 }
 
 /**
- * Sections grouping type
- */
-interface FactSections {
-  partA: XBRLFact[];
-  partD: XBRLFact[];
-  partE: XBRLFact[];
-  partH: XBRLFact[];
-  partJ: XBRLFact[];
-  other: XBRLFact[];
-}
-
-/**
- * Group facts by their section (Part A, D, E, etc.)
- */
-function groupFactsBySection(facts: XBRLFact[]): FactSections {
-  const sections: FactSections = {
-    partA: [],
-    partD: [],
-    partE: [],
-    partH: [],
-    partJ: [],
-    other: [],
-  };
-
-  for (const fact of facts) {
-    if (fact.name.includes('Offeror') || fact.name.includes('PartA')) {
-      sections.partA.push(fact);
-    } else if (fact.name.includes('CryptoAsset') || fact.name.includes('Token') || fact.name.includes('Blockchain') || fact.name.includes('Project')) {
-      sections.partD.push(fact);
-    } else if (fact.name.includes('Offering') || fact.name.includes('Price') || fact.name.includes('Subscription') || fact.name.includes('Withdrawal')) {
-      sections.partE.push(fact);
-    } else if (fact.name.includes('Technology') || fact.name.includes('SmartContract')) {
-      sections.partH.push(fact);
-    } else if (fact.name.includes('Energy') || fact.name.includes('Sustainability') || fact.name.includes('Renewable')) {
-      sections.partJ.push(fact);
-    } else {
-      sections.other.push(fact);
-    }
-  }
-
-  return sections;
-}
-
-/**
- * Render a section with its facts
- */
-function renderSection(title: string, facts: XBRLFact[]): string {
-  if (facts.length === 0) {
-    return '';
-  }
-
-  const fieldsHtml = facts.map((fact) => {
-    const label = formatLabel(fact.name);
-    return `
-    <div class="field">
-      <span class="field-label">${label}:</span>
-      <span class="field-value">${renderFact(fact)}</span>
-    </div>`;
-  }).join('\n');
-
-  return `
-  <section class="section">
-    <h2>${title}</h2>
-    ${fieldsHtml}
-  </section>`;
-}
-
-/**
- * Format element name to readable label
- */
-function formatLabel(name: string): string {
-  // Remove namespace prefix
-  const localName = name.split(':')[1] || name;
-
-  // Add spaces before capitals and format
-  return localName
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/^\\s/, '')
-    .trim();
-}
-
-/**
  * Create an IXBRLDocument object (for programmatic use)
  */
 export function createIXBRLDocument(data: Partial<WhitepaperData>): IXBRLDocument {
   const contexts = buildAllContexts(data);
-  const facts = buildAllFacts(data);
-  const units = getRequiredUnits(facts);
+  const durationCtxId = getContextId('duration');
+  const instantCtxId = getContextId('instant');
+  const factValues = mapDataToFactValues(data, durationCtxId, instantCtxId);
+
+  // Convert fact values to XBRLFact array
+  const facts = Array.from(factValues.entries()).map(([element, fv]) => ({
+    name: element,
+    contextRef: fv.contextRef,
+    value: fv.value,
+    unitRef: fv.unitRef,
+    decimals: fv.decimals,
+    isHidden: fv.taxonomyUri !== undefined,
+    humanReadableValue: fv.humanReadable,
+  }));
+
+  const units = getUsedUnits(factValues);
 
   return {
     contexts,

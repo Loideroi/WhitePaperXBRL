@@ -153,7 +153,36 @@ export function buildManagementMemberContext(
 }
 
 /**
- * Build all contexts from whitepaper data
+ * Build context for person involved in implementation (typed dimension)
+ */
+export function buildPersonInvolvedContext(
+  config: ContextConfig,
+  memberIndex: number
+): XBRLContext {
+  const entity = createEntity(config.lei);
+
+  return {
+    id: generateContextId('person_involved', memberIndex),
+    entity,
+    period: config.durationPeriod
+      ? createDurationPeriod(config.durationPeriod.startDate, config.durationPeriod.endDate)
+      : createInstantPeriod(config.documentDate),
+    scenario: {
+      typedMember: {
+        dimension: 'mica:PersonInvolvedInImplementationDimension',
+        value: `person_${memberIndex}`,
+      },
+    },
+  };
+}
+
+/**
+ * Build all contexts from whitepaper data.
+ *
+ * Following the SPURS/ESMA pattern:
+ * - c-01: Instant context (documentDate) for date/instant fields
+ * - c-duration: Duration context (year of documentDate) for most facts
+ * - Typed dimension contexts for management body members and persons involved
  */
 export function buildAllContexts(data: Partial<WhitepaperData>): XBRLContext[] {
   const documentDate = data.documentDate || new Date().toISOString().split('T')[0] || '';
@@ -163,9 +192,18 @@ export function buildAllContexts(data: Partial<WhitepaperData>): XBRLContext[] {
     throw new Error('LEI is required for context generation');
   }
 
+  // Calculate duration period: full year of documentDate
+  const year = documentDate.split('-')[0] || new Date().getFullYear().toString();
+  const durationStart = `${year}-01-01`;
+  const durationEnd = `${year}-12-31`;
+
   const config: ContextConfig = {
     documentDate,
     lei,
+    durationPeriod: {
+      startDate: durationStart,
+      endDate: durationEnd,
+    },
   };
 
   const contexts: XBRLContext[] = [...buildContexts(config)];
@@ -197,6 +235,13 @@ export function buildAllContexts(data: Partial<WhitepaperData>): XBRLContext[] {
     });
   }
 
+  // Add person involved in implementation contexts
+  if (data.projectPersons) {
+    data.projectPersons.forEach((_, index) => {
+      contexts.push(buildPersonInvolvedContext(config, index));
+    });
+  }
+
   return contexts;
 }
 
@@ -204,12 +249,15 @@ export function buildAllContexts(data: Partial<WhitepaperData>): XBRLContext[] {
  * Get the appropriate context ID for a fact
  */
 export function getContextId(
-  factType: 'instant' | 'duration' | 'offeror' | 'issuer' | 'management',
+  factType: 'instant' | 'duration' | 'offeror' | 'issuer' | 'management' | 'person_involved',
   memberIndex?: number,
   entityType?: 'offeror' | 'issuer' | 'operator'
 ): string {
   if (factType === 'management' && memberIndex !== undefined && entityType) {
     return generateContextId(`mgmt_${entityType}`, memberIndex);
+  }
+  if (factType === 'person_involved' && memberIndex !== undefined) {
+    return generateContextId('person_involved', memberIndex);
   }
   return generateContextId(factType);
 }

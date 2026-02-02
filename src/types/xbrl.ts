@@ -90,6 +90,12 @@ export const XBRLFactSchema = z.object({
   decimals: z.number().optional(),
   value: z.union([z.string(), z.number(), z.boolean()]),
   escape: z.boolean().optional(),
+  /** Inline XBRL transformation format (e.g., "ixt4:fixed-true", "ixt:num-dot-decimal") */
+  format: z.string().optional(),
+  /** Whether this fact should be placed in ix:hidden (enumeration types) */
+  isHidden: z.boolean().optional(),
+  /** Human-readable value for hidden enumeration facts */
+  humanReadableValue: z.string().optional(),
 });
 
 export type XBRLFact = z.infer<typeof XBRLFactSchema>;
@@ -101,9 +107,28 @@ export interface IXBRLDocument {
   contexts: XBRLContext[];
   units: XBRLUnit[];
   facts: XBRLFact[];
+  /** Hidden facts (enumeration types placed in ix:hidden) */
+  hiddenFacts?: XBRLFact[];
   language: string;
   taxonomyRef: string;
 }
+
+/**
+ * XBRL Namespaces used in MiCA iXBRL documents
+ */
+export const XBRL_NAMESPACES = {
+  xhtml: 'http://www.w3.org/1999/xhtml',
+  xbrli: 'http://www.xbrl.org/2003/instance',
+  ix: 'http://www.xbrl.org/2013/inlineXBRL',
+  ixt: 'http://www.xbrl.org/inlineXBRL/transformation/2020-02-12',
+  ixt4: 'http://www.xbrl.org/inlineXBRL/transformation/2020-02-12',
+  link: 'http://www.xbrl.org/2003/linkbase',
+  xlink: 'http://www.w3.org/1999/xlink',
+  xbrldi: 'http://xbrl.org/2006/xbrldi',
+  mica: 'https://www.esma.europa.eu/taxonomy/2025-03-31/mica/',
+  iso4217: 'http://www.xbrl.org/2003/iso4217',
+  utr: 'http://www.xbrl.org/2009/utr',
+} as const;
 
 /**
  * Validation severity levels
