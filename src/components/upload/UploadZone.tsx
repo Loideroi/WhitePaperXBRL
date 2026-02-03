@@ -4,12 +4,25 @@
  * Upload Zone Component
  *
  * Drag-and-drop file upload with progress indication and token type selection.
+ * Supports PDF, DOCX, ODT, and RTF formats.
  */
 
 import { useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileUp, X, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import type { TokenType } from '@/types/taxonomy';
+
+/** Supported file extensions and their MIME types */
+const SUPPORTED_FORMATS: Record<string, string[]> = {
+  '.pdf': ['application/pdf'],
+  '.docx': ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  '.doc': ['application/msword'],
+  '.odt': ['application/vnd.oasis.opendocument.text'],
+  '.rtf': ['application/rtf', 'text/rtf'],
+};
+
+const ACCEPT_STRING = Object.keys(SUPPORTED_FORMATS).join(',');
+const ACCEPT_MIMES = Object.values(SUPPORTED_FORMATS).flat().join(',');
 
 interface UploadResponse {
   success: boolean;
@@ -102,12 +115,22 @@ export function UploadZone({
         return `File exceeds maximum size of ${Math.round(maxSize / 1024 / 1024)}MB`;
       }
 
-      if (!file.name.toLowerCase().endsWith('.pdf')) {
-        return 'Only PDF files are accepted';
+      // Check file extension
+      const fileName = file.name.toLowerCase();
+      const validExtensions = Object.keys(SUPPORTED_FORMATS);
+      const hasValidExtension = validExtensions.some((ext) => fileName.endsWith(ext));
+
+      if (!hasValidExtension) {
+        return 'Unsupported format. Accepted: PDF, DOCX, ODT, RTF';
       }
 
-      if (file.type !== 'application/pdf' && !file.type.includes('pdf')) {
-        return 'Only PDF files are accepted';
+      // Check MIME type (with fallback for unknown types)
+      const allMimeTypes = Object.values(SUPPORTED_FORMATS).flat();
+      if (file.type && !allMimeTypes.includes(file.type) && file.type !== 'application/octet-stream') {
+        // Allow if extension is valid but MIME is unknown/generic
+        if (file.type !== '') {
+          return 'Unsupported format. Accepted: PDF, DOCX, ODT, RTF';
+        }
       }
 
       return null;
@@ -268,7 +291,7 @@ export function UploadZone({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,application/pdf"
+          accept={`${ACCEPT_STRING},${ACCEPT_MIMES}`}
           onChange={handleFileSelect}
           className="hidden"
           disabled={status === 'uploading'}
@@ -278,10 +301,10 @@ export function UploadZone({
         {status === 'idle' && (
           <>
             <FileUp className="mx-auto h-12 w-12 text-muted-foreground" />
-            <p className="mt-4 text-lg font-medium">Drop your PDF here</p>
+            <p className="mt-4 text-lg font-medium">Drop your whitepaper here</p>
             <p className="mt-1 text-sm text-muted-foreground">or click to browse</p>
             <p className="mt-4 text-xs text-muted-foreground">
-              Supports PDF whitepapers up to {Math.round(maxSize / 1024 / 1024)}MB
+              Supports PDF, DOCX, ODT, RTF up to {Math.round(maxSize / 1024 / 1024)}MB
             </p>
           </>
         )}
@@ -355,7 +378,7 @@ export function UploadZone({
         <div className="mt-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
           <p className="text-sm text-green-600 font-medium">Ready to process</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Your PDF has been uploaded. Click continue to extract and map whitepaper fields.
+            Your document has been uploaded. Click continue to extract and map whitepaper fields.
           </p>
           <button
             type="button"

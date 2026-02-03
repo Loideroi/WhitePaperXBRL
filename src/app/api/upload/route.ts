@@ -1,7 +1,9 @@
 /**
- * PDF Upload API Endpoint
+ * Document Upload API Endpoint
  *
- * POST /api/upload - Upload and process a PDF whitepaper in one step
+ * POST /api/upload - Upload and process a whitepaper document
+ *
+ * Supports multiple formats: PDF, DOCX, ODT, RTF
  *
  * In serverless environments, we process immediately instead of storing
  * the file for later processing.
@@ -16,26 +18,55 @@ import {
   rateLimitHeaders,
   RATE_LIMITS,
 } from '@/lib/security';
-import { extractPdfText } from '@/lib/pdf/extractor';
+import {
+  extractDocument,
+  detectFormat,
+  isSupportedFormat,
+  type SupportedFormat,
+} from '@/lib/document/extractor';
 import { mapPdfToWhitepaper } from '@/lib/pdf/field-mapper';
 import type { TokenType } from '@/types/taxonomy';
 
 // Maximum file size: 50MB
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
-// PDF magic bytes
-const PDF_MAGIC_BYTES = [0x25, 0x50, 0x44, 0x46]; // %PDF
+// File magic bytes for validation
+const MAGIC_BYTES: Record<SupportedFormat, number[][]> = {
+  pdf: [[0x25, 0x50, 0x44, 0x46]], // %PDF
+  docx: [[0x50, 0x4b, 0x03, 0x04]], // PK.. (ZIP)
+  odt: [[0x50, 0x4b, 0x03, 0x04]], // PK.. (ZIP)
+  rtf: [[0x7b, 0x5c, 0x72, 0x74, 0x66]], // {\rtf
+};
 
 const UploadQuerySchema = z.object({
   tokenType: z.enum(['OTHR', 'ART', 'EMT']).optional(),
 });
 
 /**
- * Validate that the buffer contains PDF magic bytes
+ * Validate that the buffer starts with expected magic bytes
  */
-function isPdfBuffer(buffer: Buffer): boolean {
+function validateMagicBytes(buffer: Buffer, format: SupportedFormat): boolean {
   if (buffer.length < 4) return false;
-  return PDF_MAGIC_BYTES.every((byte, index) => buffer[index] === byte);
+
+  const expectedBytes = MAGIC_BYTES[format];
+  if (!expectedBytes) return false;
+
+  return expectedBytes.some((bytes) =>
+    bytes.every((byte, index) => buffer[index] === byte)
+  );
+}
+
+/**
+ * Get human-readable format name
+ */
+function getFormatName(format: SupportedFormat): string {
+  const names: Record<SupportedFormat, string> = {
+    pdf: 'PDF',
+    docx: 'Microsoft Word (DOCX)',
+    odt: 'OpenDocument Text (ODT)',
+    rtf: 'Rich Text Format (RTF)',
+  };
+  return names[format] || format.toUpperCase();
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -72,7 +103,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           success: false,
           error: {
             code: 'FILE_REQUIRED',
-            message: 'A PDF file is required',
+            message: 'A document file is required (PDF, DOCX, ODT, or RTF)',
           },
         },
         { status: 400 }
@@ -93,18 +124,34 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    // Detect format from MIME type and filename
+    const format = detectFormat(file.type, file.name);
+
+    if (!isSupportedFormat(format)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'UNSUPPORTED_FORMAT',
+            message: 'Unsupported file format. Accepted formats: PDF, DOCX, ODT, RTF',
+          },
+        },
+        { status: 415 }
+      );
+    }
+
     // Read file buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Validate PDF magic bytes
-    if (!isPdfBuffer(buffer)) {
+    // Validate magic bytes
+    if (!validateMagicBytes(buffer, format)) {
       return NextResponse.json(
         {
           success: false,
           error: {
             code: 'INVALID_FILE_TYPE',
-            message: 'Only PDF files are accepted',
+            message: `File content does not match ${getFormatName(format)} format`,
           },
         },
         { status: 415 }
@@ -130,10 +177,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const sessionId = generateSessionId();
     const now = new Date();
 
-    // Process the PDF immediately (serverless-friendly)
-    const extraction = await extractPdfText(buffer);
+    // Extract document content
+    const extraction = await extractDocument(buffer, file.type, file.name);
     const effectiveTokenType = tokenType as TokenType;
-    const mapping = mapPdfToWhitepaper(extraction, effectiveTokenType);
+
+    // Map to whitepaper fields (uses same mapper for all formats)
+    const mapping = mapPdfToWhitepaper(
+      {
+        text: extraction.text,
+        pages: extraction.pages || 0,
+        metadata: extraction.metadata,
+        sections: extraction.sections,
+      },
+      effectiveTokenType
+    );
 
     // Return complete processing result
     return NextResponse.json(
@@ -143,6 +200,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           sessionId,
           filename: file.name,
           size: file.size,
+          format: extraction.format,
           tokenType: effectiveTokenType,
           uploadedAt: now.toISOString(),
           status: 'complete',
@@ -169,7 +227,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         success: false,
         error: {
           code: 'PROCESSING_FAILED',
-          message: error instanceof Error ? error.message : 'Failed to process PDF',
+          message: error instanceof Error ? error.message : 'Failed to process document',
         },
       },
       { status: 500 }

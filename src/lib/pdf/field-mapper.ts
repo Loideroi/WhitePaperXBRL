@@ -1119,19 +1119,69 @@ function escapeRegexSpecialChars(str: string): string {
 }
 
 /**
+ * Smart join of text lines - removes soft line breaks while preserving paragraphs.
+ * PDF text extraction often includes line breaks from text wrapping that should
+ * be spaces (e.g., "Fan\nToken" should be "Fan Token").
+ */
+function smartJoinLines(text: string): string {
+  // Mark intentional paragraph breaks (double newlines or more)
+  let result = text.replace(/\n\n+/g, '{{PARA}}');
+
+  // CRITICAL: Normalize whitespace around single newlines BEFORE pattern matching
+  // PDF extraction often has "Fan \n Token" or "Fan\n Token" which breaks the patterns
+  // First, trim trailing whitespace before newlines
+  result = result.replace(/[ \t]+\n/g, '\n');
+  // Then, trim leading whitespace after newlines (but not after PARA markers)
+  result = result.replace(/\n[ \t]+/g, '\n');
+
+  // Join lines where a word continues on the next line (hyphenation)
+  // e.g., "tech-\nnology" -> "technology"
+  result = result.replace(/(\w)-\n(\w)/g, '$1$2');
+
+  // Join lines where the line ends mid-sentence (no terminal punctuation)
+  // and the next line starts with a lowercase letter or continues naturally
+  // e.g., "The $SPURS Fan\nToken is" -> "The $SPURS Fan Token is"
+  result = result.replace(/([a-zA-Z,;:])\n([a-z])/g, '$1 $2');
+
+  // Join lines where line ends with a word and next starts with capital
+  // (common in PDF where sentences wrap)
+  // But preserve if current line ends with sentence-ending punctuation
+  result = result.replace(/([a-z])\n([A-Z])/g, (match, p1, p2) => {
+    // This is likely a sentence continuation, join with space
+    return `${p1} ${p2}`;
+  });
+
+  // Handle lines ending with common continuation patterns
+  result = result.replace(/(the|a|an|of|in|to|for|and|or|with|by|as|is|are|was|were|be|been|being)\n/gi,
+    '$1 ');
+
+  // Restore paragraph breaks
+  result = result.replace(/{{PARA}}/g, '\n\n');
+
+  // Clean up any double spaces created
+  result = result.replace(/  +/g, ' ');
+
+  return result;
+}
+
+/**
  * Clean field content - remove excess whitespace, normalize formatting
  */
 function cleanFieldContent(content: string): string {
-  return content
-    // Collapse multiple spaces
-    .replace(/ +/g, ' ')
-    // Preserve intentional paragraph breaks but collapse excessive ones
-    .replace(/\n{3,}/g, '\n\n')
-    // Remove trailing/leading whitespace from each line
+  // First apply smart line joining to handle PDF text wrapping
+  let cleaned = smartJoinLines(content);
+
+  // Collapse excessive paragraph breaks
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+
+  // Remove trailing/leading whitespace from each line
+  cleaned = cleaned
     .split('\n')
     .map(line => line.trim())
     .join('\n')
     .trim();
+
+  return cleaned;
 }
 
 /**
