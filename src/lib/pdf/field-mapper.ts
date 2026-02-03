@@ -938,18 +938,22 @@ function extractAllRawFields(text: string): Record<string, string> {
   const fieldPattern = /(?:^|\n)\s*([A-JS]\.?\d+(?:-[A-JS]?\d+)?|\d{1,2})\s+/g;
 
   // Find all field markers and their positions
-  const fieldPositions: Array<{ fieldNum: string; start: number; end: number }> = [];
+  // Also track ranges for later expansion
+  const fieldPositions: Array<{ fieldNum: string; start: number; end: number; isRange: boolean; rangeFields?: string[] }> = [];
   let match;
   while ((match = fieldPattern.exec(normalizedText)) !== null) {
     const fieldNum = match[1];
-    // Normalize simple numbers to two-digit format for summary fields
     if (fieldNum) {
+      const isRange = fieldNum.includes('-');
+      const rangeFields = isRange ? parseFieldRange(fieldNum) : undefined;
       const normalizedNum = normalizeFieldNumber(fieldNum);
       if (normalizedNum) {
         fieldPositions.push({
           fieldNum: normalizedNum,
           start: match.index + match[0].length,
           end: match.index + match[0].length,
+          isRange,
+          rangeFields,
         });
       }
     }
@@ -990,25 +994,60 @@ function extractAllRawFields(text: string): Record<string, string> {
 
     if (content && content.length > 1) {
       rawFields[current.fieldNum] = content;
+
+      // If this is a range field, also populate all fields in the range
+      if (current.isRange && current.rangeFields) {
+        for (const rangeField of current.rangeFields) {
+          if (!rawFields[rangeField]) {
+            rawFields[rangeField] = content;
+          }
+        }
+      }
     }
   }
 
   // Also extract fields using pattern matching for cases where table parsing fails
   extractFieldsByLabelPattern(normalizedText, rawFields);
 
+  // Look for "Part X does not apply" patterns and populate related fields
+  populateNotApplicableSections(normalizedText, rawFields);
+
   return rawFields;
 }
 
 /**
- * Normalize field numbers to our standard format
+ * Parse a field range like "B.2-B12" or "C.1-C14" and return all field numbers in the range
  */
-function normalizeFieldNumber(fieldNum: string): string | null {
-  // Handle ranges like "B.2-B12" - extract the first field
-  if (fieldNum.includes('-')) {
-    const first = fieldNum.split('-')[0];
-    return normalizeFieldNumber(first || '');
+function parseFieldRange(fieldNum: string): string[] {
+  // Check if it's a range
+  const rangeMatch = fieldNum.match(/^([A-JS])\.?(\d+)-([A-JS])?(\d+)$/);
+  if (!rangeMatch) {
+    // Not a range, return single normalized field
+    const normalized = normalizeSingleFieldNumber(fieldNum);
+    return normalized ? [normalized] : [];
   }
 
+  const section = rangeMatch[1];
+  const startNum = parseInt(rangeMatch[2] ?? '0', 10);
+  const endNum = parseInt(rangeMatch[4] ?? '0', 10);
+
+  if (startNum > endNum || endNum - startNum > 50) {
+    // Invalid range or too large, just return the first field
+    return [`${section}.${startNum}`];
+  }
+
+  // Generate all fields in the range
+  const fields: string[] = [];
+  for (let i = startNum; i <= endNum; i++) {
+    fields.push(`${section}.${i}`);
+  }
+  return fields;
+}
+
+/**
+ * Normalize a single field number (not a range) to standard format
+ */
+function normalizeSingleFieldNumber(fieldNum: string): string | null {
   // Handle simple numbers (1-10) - map to two-digit format
   if (/^\d{1,2}$/.test(fieldNum)) {
     const num = parseInt(fieldNum, 10);
@@ -1030,6 +1069,20 @@ function normalizeFieldNumber(fieldNum: string): string | null {
   }
 
   return null;
+}
+
+/**
+ * Normalize field numbers to our standard format
+ * For ranges, returns just the first field (use parseFieldRange for full expansion)
+ */
+function normalizeFieldNumber(fieldNum: string): string | null {
+  // Handle ranges like "B.2-B12" - extract the first field
+  if (fieldNum.includes('-')) {
+    const first = fieldNum.split('-')[0];
+    return normalizeFieldNumber(first || '');
+  }
+
+  return normalizeSingleFieldNumber(fieldNum);
 }
 
 /**
@@ -1107,6 +1160,50 @@ function extractFieldsByLabelPattern(text: string, rawFields: Record<string, str
       const content = cleanFieldContent(match[1]);
       if (content.length > 1) {
         rawFields[fieldDef.number] = content;
+      }
+    }
+  }
+}
+
+/**
+ * Populate fields for sections marked as "not applicable" in the PDF.
+ * Detects patterns like "Part B does not apply" and fills in the related fields.
+ */
+function populateNotApplicableSections(text: string, rawFields: Record<string, string>): void {
+  // Define section field ranges
+  const sectionRanges: Record<string, { start: number; end: number }> = {
+    B: { start: 2, end: 13 },  // B.2 through B.13 (B.1 is the indicator)
+    C: { start: 2, end: 15 },  // C.2 through C.15 (C.1 might have explanation)
+  };
+
+  // Check for "Part B does not apply" patterns
+  const partBNotApplicable = /Part\s*B\s*does\s*not\s*apply|Issuer\s*(?:is|was)\s*(?:the\s*)?same\s*as\s*(?:the\s*)?Offeror/i.test(text);
+  const partCNotApplicable = /Part\s*C\s*does\s*not\s*apply|Non-?applicability\s*of\s*Part\s*C/i.test(text);
+
+  // Fill in Part B fields if not applicable
+  if (partBNotApplicable) {
+    const range = sectionRanges.B;
+    if (range) {
+      const explanation = rawFields['B.2'] || 'Not applicable - Issuer is same as Offeror.';
+      for (let i = range.start; i <= range.end; i++) {
+        const fieldNum = `B.${i}`;
+        if (!rawFields[fieldNum]) {
+          rawFields[fieldNum] = explanation;
+        }
+      }
+    }
+  }
+
+  // Fill in Part C fields if not applicable
+  if (partCNotApplicable) {
+    const range = sectionRanges.C;
+    if (range) {
+      const explanation = rawFields['C.1'] || 'Not applicable - White paper drafted by Offeror.';
+      for (let i = range.start; i <= range.end; i++) {
+        const fieldNum = `C.${i}`;
+        if (!rawFields[fieldNum]) {
+          rawFields[fieldNum] = explanation;
+        }
       }
     }
   }

@@ -275,8 +275,6 @@ function mapDataToFactValues(
       if (values.has(fieldDef.xbrlElement)) continue;
       // Skip dimensional fields (management body members etc.)
       if (fieldDef.isDimensional) continue;
-      // Skip enumeration fields (need URI resolution, can't use raw text)
-      if (fieldDef.isHidden) continue;
 
       // Look up by exact field number
       let content = rawFields[fieldDef.number];
@@ -289,10 +287,35 @@ function mapDataToFactValues(
 
       if (content && content.trim().length > 0) {
         const ctxRef = fieldDef.periodType === 'instant' ? instantContextId : durationContextId;
-        values.set(fieldDef.xbrlElement, {
-          value: content.trim(),
-          contextRef: ctxRef,
-        });
+        const trimmedContent = content.trim();
+
+        // For enumeration fields, try to resolve to taxonomy URI
+        if (fieldDef.isHidden && fieldDef.dataType === 'enumerationItemType') {
+          // Try to get the enumeration URI
+          const enumUri = getEnumerationUri(fieldDef.xbrlElement, trimmedContent);
+          if (enumUri) {
+            const humanLabel = getEnumerationLabel(fieldDef.xbrlElement, trimmedContent) || trimmedContent;
+            values.set(fieldDef.xbrlElement, {
+              value: trimmedContent,
+              contextRef: ctxRef,
+              taxonomyUri: enumUri,
+              humanReadable: humanLabel,
+            });
+          } else {
+            // No URI mapping - display as regular text with human-readable value
+            values.set(fieldDef.xbrlElement, {
+              value: trimmedContent,
+              contextRef: ctxRef,
+              humanReadable: trimmedContent,
+            });
+          }
+        } else {
+          // Regular field
+          values.set(fieldDef.xbrlElement, {
+            value: trimmedContent,
+            contextRef: ctxRef,
+          });
+        }
       }
     }
   }
