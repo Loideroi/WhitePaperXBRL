@@ -48,10 +48,14 @@ async function main() {
   const rawFields = mapping.data.rawFields || {};
   const fieldKeys = Object.keys(rawFields).sort((a, b) => {
     // Sort by section, then by number
-    const [aLetter, aNum] = a.split('.').map(x => x || '');
-    const [bLetter, bNum] = b.split('.').map(x => x || '');
+    const aParts = a.split('.');
+    const bParts = b.split('.');
+    const aLetter = aParts[0] ?? '';
+    const bLetter = bParts[0] ?? '';
+    const aNum = aParts[1] ?? '0';
+    const bNum = bParts[1] ?? '0';
     if (aLetter !== bLetter) return aLetter.localeCompare(bLetter);
-    return parseInt(aNum || '0', 10) - parseInt(bNum || '0', 10);
+    return parseInt(aNum, 10) - parseInt(bNum, 10);
   });
 
   console.log('Total raw fields:', fieldKeys.length);
@@ -80,7 +84,7 @@ async function main() {
   for (const field of checkFields) {
     const hasField = ixbrl.includes(`<td>${field}</td>`);
     const nextTdMatch = ixbrl.match(new RegExp(`<td>${field.replace('.', '\\.')}</td>\\s*<td>[^<]+</td>\\s*<td>([^<]{1,50})`));
-    const preview = nextTdMatch ? nextTdMatch[1].slice(0, 40) : '(empty)';
+    const preview = nextTdMatch?.[1]?.slice(0, 40) ?? '(empty)';
     console.log(`  ${field}: ${hasField ? '✓' : '✗'} ${preview}`);
   }
 }
