@@ -49,15 +49,6 @@ export function renderCoverPage(data: CoverPageData): string {
       <p>Pursuant to Regulation (EU) 2023/1114 (MiCA)</p>
       <p>Date: ${escapeHtml(data.documentDate)}</p>
     </div>
-    <div class="disclaimer-box">
-      <strong>Important Notice:</strong> This crypto-asset white paper has not been approved
-      by any competent authority in any Member State of the European Union. The offeror of the
-      crypto-asset is solely responsible for the content of this crypto-asset white paper.
-      This crypto-asset white paper complies with Title II of Regulation (EU) 2023/1114 and,
-      to the best of the knowledge of the management body, the information presented in the
-      crypto-asset white paper is fair, clear and not misleading and the crypto-asset white
-      paper makes no omission likely to affect its import.
-    </div>
   </div>`;
 }
 

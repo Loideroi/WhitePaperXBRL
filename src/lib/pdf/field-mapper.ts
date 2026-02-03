@@ -904,55 +904,212 @@ function extractMultiLineTableContent(text: string, sectionNum: string, fieldNam
 /**
  * Extract ALL numbered field content from the PDF text.
  *
- * Iterates through all MiCA field definitions and attempts to extract content
- * for each numbered field using table content extraction. This captures fields
- * that aren't covered by the specific typed extraction mappings.
+ * This is a complete rewrite that properly parses the MiCA table format:
+ * "No | Field | Content" with multi-line content cells.
  *
- * Returns a Record keyed by field number (e.g., "A.1", "E.14", "S.8").
+ * The PDF uses these field patterns:
+ * - Simple numbers (1-10) for Regulatory Disclosures and Summary
+ * - Lettered fields (A.1, A.2, ... J.1) for Parts A-J
+ * - S.1-S.16 for Sustainability indicators
+ * - Ranges like "B.2-B12" or "C.1-C14" for "not applicable" sections
+ *
+ * Returns a Record keyed by field number (e.g., "A.1", "E.14", "S.8", "01").
  */
 function extractAllRawFields(text: string): Record<string, string> {
   const rawFields: Record<string, string> = {};
 
+  // Normalize whitespace but preserve paragraph structure
+  const normalizedText = text
+    .replace(/\r\n/g, '\n')
+    .replace(/\t/g, ' ')
+    .replace(/ +/g, ' ');
+
+  // Build a list of all field numbers we want to extract, ordered by appearance in document
+  const fieldNumbers: string[] = [];
   for (const fieldDef of OTHR_FIELD_DEFINITIONS) {
-    // Skip dimensional fields (management body members etc. - handled separately)
+    // Skip dimensional fields and sub-fields
     if (fieldDef.isDimensional) continue;
-    // Skip sub-fields with letter suffixes (A.3c, A.4c etc. - derived from parent)
     if (/[a-z]$/.test(fieldDef.number)) continue;
+    fieldNumbers.push(fieldDef.number);
+  }
 
-    const fieldNum = fieldDef.number;
-    const label = fieldDef.label;
+  // Create a regex that matches any MiCA field number at the start of a table row
+  // Patterns: "1 ", "01 ", "A.1 ", "A.12 ", "E.21 ", "S.8 ", "B.2-B12 "
+  const fieldPattern = /(?:^|\n)\s*([A-JS]\.?\d+(?:-[A-JS]?\d+)?|\d{1,2})\s+/g;
 
-    // Build alternative labels for more robust matching
-    const labels = [label];
-    // Also try without parenthetical clarifications
-    const shortLabel = label.replace(/\s*\(.*?\)\s*/g, '').trim();
-    if (shortLabel !== label && shortLabel.length > 3) {
-      labels.push(shortLabel);
-    }
-
-    let content: string | null = null;
-
-    // Try multiline extraction first (better for long content / text blocks)
-    if (fieldDef.isTextBlock) {
-      content = extractMultiLineTableContent(text, fieldNum, labels);
-    }
-
-    // Fall back to single-line extraction
-    if (!content || content.length < 2) {
-      content = extractTableContent(text, fieldNum, labels);
-    }
-
-    // Last resort: try matching just by field number with generous content capture
-    if (!content || content.length < 2) {
-      content = extractContentByFieldNumber(text, fieldNum);
-    }
-
-    if (content && content.length > 1) {
-      rawFields[fieldNum] = content;
+  // Find all field markers and their positions
+  const fieldPositions: Array<{ fieldNum: string; start: number; end: number }> = [];
+  let match;
+  while ((match = fieldPattern.exec(normalizedText)) !== null) {
+    const fieldNum = match[1];
+    // Normalize simple numbers to two-digit format for summary fields
+    if (fieldNum) {
+      const normalizedNum = normalizeFieldNumber(fieldNum);
+      if (normalizedNum) {
+        fieldPositions.push({
+          fieldNum: normalizedNum,
+          start: match.index + match[0].length,
+          end: match.index + match[0].length,
+        });
+      }
     }
   }
 
+  // Extract content between consecutive fields
+  for (let i = 0; i < fieldPositions.length; i++) {
+    const current = fieldPositions[i];
+    if (!current) continue;
+
+    const next = fieldPositions[i + 1];
+
+    // Find where the content for this field ends
+    // It ends at the next field marker or a section header
+    const contentStart = current.start;
+    let contentEnd: number;
+
+    if (next) {
+      // Find the start of the next field's row (go back to find the field number)
+      contentEnd = normalizedText.lastIndexOf('\n', next.start - 1);
+      if (contentEnd === -1 || contentEnd < contentStart) {
+        contentEnd = next.start;
+      }
+    } else {
+      // Last field - go to end of document
+      contentEnd = normalizedText.length;
+    }
+
+    // Extract and clean the content
+    let content = normalizedText.slice(contentStart, contentEnd).trim();
+
+    // Remove field labels that appear at the start (e.g., "Name Socios Technologies AG")
+    // by finding where the actual content starts after the label
+    content = removeFieldLabelFromContent(content, current.fieldNum);
+
+    // Clean up formatting
+    content = cleanFieldContent(content);
+
+    if (content && content.length > 1) {
+      rawFields[current.fieldNum] = content;
+    }
+  }
+
+  // Also extract fields using pattern matching for cases where table parsing fails
+  extractFieldsByLabelPattern(normalizedText, rawFields);
+
   return rawFields;
+}
+
+/**
+ * Normalize field numbers to our standard format
+ */
+function normalizeFieldNumber(fieldNum: string): string | null {
+  // Handle ranges like "B.2-B12" - extract the first field
+  if (fieldNum.includes('-')) {
+    const first = fieldNum.split('-')[0];
+    return normalizeFieldNumber(first || '');
+  }
+
+  // Handle simple numbers (1-10) - map to two-digit format
+  if (/^\d{1,2}$/.test(fieldNum)) {
+    const num = parseInt(fieldNum, 10);
+    if (num >= 1 && num <= 10) {
+      return num.toString().padStart(2, '0');
+    }
+    return null;
+  }
+
+  // Handle lettered fields like A.1, E.21, S.8
+  if (/^[A-JS]\.\d+$/.test(fieldNum)) {
+    return fieldNum;
+  }
+
+  // Handle fields without dot like S8 -> S.8
+  const noDotMatch = fieldNum.match(/^([A-JS])(\d+)$/);
+  if (noDotMatch) {
+    return `${noDotMatch[1]}.${noDotMatch[2]}`;
+  }
+
+  return null;
+}
+
+/**
+ * Remove field label from the start of content
+ */
+function removeFieldLabelFromContent(content: string, fieldNum: string): string {
+  // Find the field definition to get its label
+  const fieldDef = OTHR_FIELD_DEFINITIONS.find(f => f.number === fieldNum);
+  if (!fieldDef) return content;
+
+  // Try to remove the label if it appears at the start
+  const label = fieldDef.label;
+  const labelPattern = new RegExp(`^${escapeRegexSpecialChars(label)}\\s*`, 'i');
+  const withoutLabel = content.replace(labelPattern, '').trim();
+
+  // Also try common variations
+  const shortLabel = label.replace(/\s*\([^)]+\)\s*/g, '').trim();
+  if (shortLabel !== label) {
+    const shortLabelPattern = new RegExp(`^${escapeRegexSpecialChars(shortLabel)}\\s*`, 'i');
+    const withoutShortLabel = content.replace(shortLabelPattern, '').trim();
+    if (withoutShortLabel.length < content.length) {
+      return withoutShortLabel;
+    }
+  }
+
+  return withoutLabel.length < content.length ? withoutLabel : content;
+}
+
+/**
+ * Escape special regex characters
+ */
+function escapeRegexSpecialChars(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Clean field content - remove excess whitespace, normalize formatting
+ */
+function cleanFieldContent(content: string): string {
+  return content
+    // Collapse multiple spaces
+    .replace(/ +/g, ' ')
+    // Preserve intentional paragraph breaks but collapse excessive ones
+    .replace(/\n{3,}/g, '\n\n')
+    // Remove trailing/leading whitespace from each line
+    .split('\n')
+    .map(line => line.trim())
+    .join('\n')
+    .trim();
+}
+
+/**
+ * Extract fields using label-based pattern matching as a fallback
+ */
+function extractFieldsByLabelPattern(text: string, rawFields: Record<string, string>): void {
+  for (const fieldDef of OTHR_FIELD_DEFINITIONS) {
+    // Skip if already extracted
+    if (rawFields[fieldDef.number]) continue;
+    // Skip dimensional and sub-fields
+    if (fieldDef.isDimensional) continue;
+    if (/[a-z]$/.test(fieldDef.number)) continue;
+
+    const label = fieldDef.label;
+    // Look for "FieldNumber Label Content" or "FieldNumber Label\nContent" patterns
+    const escapedNum = fieldDef.number.replace('.', '\\.');
+    const escapedLabel = escapeRegexSpecialChars(label);
+
+    const pattern = new RegExp(
+      `(?:^|\\n)\\s*${escapedNum}\\s+${escapedLabel}\\s+([^\\n]+(?:\\n(?![A-JS]\\.?\\d+\\s|\\d{1,2}\\s+[A-Z])[^\\n]*)*)`,
+      'i'
+    );
+
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      const content = cleanFieldContent(match[1]);
+      if (content.length > 1) {
+        rawFields[fieldDef.number] = content;
+      }
+    }
+  }
 }
 
 /**
