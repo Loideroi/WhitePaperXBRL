@@ -939,7 +939,15 @@ function extractAllRawFields(text: string): Record<string, string> {
 
   // Find all field markers and their positions
   // Also track ranges for later expansion
-  const fieldPositions: Array<{ fieldNum: string; start: number; end: number; isRange: boolean; rangeFields?: string[] }> = [];
+  // We track BOTH matchStart (where the pattern like "\nA.3\n" begins)
+  // and contentStart (where the actual content after the field number begins)
+  const fieldPositions: Array<{
+    fieldNum: string;
+    matchStart: number;  // Where the match pattern starts (before field number)
+    contentStart: number; // Where content starts (after field number)
+    isRange: boolean;
+    rangeFields?: string[]
+  }> = [];
   let match;
   while ((match = fieldPattern.exec(normalizedText)) !== null) {
     const fieldNum = match[1];
@@ -950,8 +958,8 @@ function extractAllRawFields(text: string): Record<string, string> {
       if (normalizedNum) {
         fieldPositions.push({
           fieldNum: normalizedNum,
-          start: match.index + match[0].length,
-          end: match.index + match[0].length,
+          matchStart: match.index,  // Start of the match (e.g., the \n before "A.3")
+          contentStart: match.index + match[0].length,  // After the field number
           isRange,
           rangeFields,
         });
@@ -967,16 +975,14 @@ function extractAllRawFields(text: string): Record<string, string> {
     const next = fieldPositions[i + 1];
 
     // Find where the content for this field ends
-    // It ends at the next field marker or a section header
-    const contentStart = current.start;
+    // It ends at the start of the next field's match (before the \n that precedes the field number)
+    const contentStart = current.contentStart;
     let contentEnd: number;
 
     if (next) {
-      // Find the start of the next field's row (go back to find the field number)
-      contentEnd = normalizedText.lastIndexOf('\n', next.start - 1);
-      if (contentEnd === -1 || contentEnd < contentStart) {
-        contentEnd = next.start;
-      }
+      // Content ends where the next field's match begins
+      // This correctly excludes the next field number from our content
+      contentEnd = next.matchStart;
     } else {
       // Last field - go to end of document
       contentEnd = normalizedText.length;
