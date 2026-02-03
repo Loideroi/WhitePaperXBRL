@@ -100,28 +100,22 @@ async function extractOfficeDocument(
   format: SupportedFormat
 ): Promise<DocumentExtractionResult> {
   try {
-    // officeparser returns structured content
+    // parseOffice returns an AST with a toText() method
     const result = await parseOffice(buffer);
 
-    // Extract text from the parsed result
-    // officeparser v6+ returns an AST structure
     let text = '';
     const metadata: DocumentExtractionResult['metadata'] = {};
 
     if (typeof result === 'string') {
-      // Older versions return plain text
+      // Unlikely but handle string output
       text = result;
     } else if (result && typeof result === 'object') {
-      // v6+ returns structured data
-      // Handle both AST and legacy formats
-      if ('text' in result && typeof result.text === 'string') {
-        text = result.text;
-      } else if ('body' in result && Array.isArray(result.body)) {
-        // AST format - extract text from paragraphs
-        text = extractTextFromAST(result.body);
-      } else {
-        // Try to stringify and extract
-        text = JSON.stringify(result);
+      // Use the built-in toText() method for proper text extraction
+      if ('toText' in result && typeof result.toText === 'function') {
+        text = result.toText();
+      } else if ('content' in result && Array.isArray(result.content)) {
+        // Fallback: manually extract text from content nodes
+        text = extractTextFromContentNodes(result.content);
       }
 
       // Extract metadata if available
@@ -132,6 +126,9 @@ async function extractOfficeDocument(
         metadata.creator = meta.creator as string | undefined;
       }
     }
+
+    // Clean up the extracted text
+    text = cleanExtractedText(text);
 
     return {
       text,
@@ -149,42 +146,80 @@ async function extractOfficeDocument(
 }
 
 /**
- * Extract text from officeparser AST structure
+ * Extract text from officeparser content nodes.
+ * Used as a fallback if toText() is not available.
  */
-function extractTextFromAST(body: unknown[]): string {
-  const paragraphs: string[] = [];
+function extractTextFromContentNodes(content: unknown[]): string {
+  const lines: string[] = [];
 
   function processNode(node: unknown): void {
     if (!node || typeof node !== 'object') return;
 
     const obj = node as Record<string, unknown>;
+    const nodeType = obj.type as string | undefined;
 
-    // Check for text content
-    if ('text' in obj && typeof obj.text === 'string') {
-      paragraphs.push(obj.text);
+    // For table rows, extract cells in order and join with tab
+    if (nodeType === 'row' && 'children' in obj && Array.isArray(obj.children)) {
+      const cellTexts: string[] = [];
+      for (const child of obj.children) {
+        const childObj = child as Record<string, unknown>;
+        if (childObj.type === 'cell' && typeof childObj.text === 'string') {
+          cellTexts.push(childObj.text.trim());
+        }
+      }
+      if (cellTexts.length > 0) {
+        lines.push(cellTexts.join('\t'));
+      }
+      return;
     }
 
-    // Check for children
+    // For table nodes, process children (rows)
+    if (nodeType === 'table' && 'children' in obj && Array.isArray(obj.children)) {
+      for (const child of obj.children) {
+        processNode(child);
+      }
+      return;
+    }
+
+    // For paragraphs/headings, extract text directly
+    if ((nodeType === 'paragraph' || nodeType === 'heading') && typeof obj.text === 'string') {
+      const text = obj.text.trim();
+      if (text) {
+        lines.push(text);
+      }
+      return;
+    }
+
+    // Process children recursively for other node types
     if ('children' in obj && Array.isArray(obj.children)) {
       for (const child of obj.children) {
         processNode(child);
       }
     }
-
-    // Check for content array
-    if ('content' in obj && Array.isArray(obj.content)) {
-      for (const item of obj.content) {
-        processNode(item);
-      }
-    }
   }
 
-  for (const item of body) {
-    processNode(item);
+  for (const node of content) {
+    processNode(node);
   }
 
-  // Join with double newlines for paragraph separation
-  return paragraphs.join('\n\n');
+  return lines.join('\n');
+}
+
+/**
+ * Clean up extracted text - normalize whitespace, fix formatting
+ */
+function cleanExtractedText(text: string): string {
+  return text
+    // Normalize line endings
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    // Collapse multiple blank lines to double newline (paragraph break)
+    .replace(/\n{3,}/g, '\n\n')
+    // Remove trailing whitespace from lines
+    .replace(/[ \t]+$/gm, '')
+    // Remove leading whitespace from lines (but preserve indentation structure)
+    .replace(/^[ \t]+/gm, '')
+    .trim();
 }
 
 /**
