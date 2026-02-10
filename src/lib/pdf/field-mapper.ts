@@ -565,31 +565,63 @@ function extractEmail(text: string): string | undefined {
  * Extract date value in ISO format
  */
 function extractDateValue(text: string): string | undefined {
+  let result: string | undefined;
+
   // Try ISO format first
   const isoMatch = text.match(/(\d{4})-(\d{2})-(\d{2})/);
-  if (isoMatch) return isoMatch[0];
+  if (isoMatch) {
+    result = isoMatch[0];
+  }
+
+  // Try DD/MM/YYYY or MM/DD/YYYY format (normalize to ISO)
+  if (!result) {
+    const slashMatch = text.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (slashMatch?.[1] && slashMatch[2] && slashMatch[3]) {
+      const a = parseInt(slashMatch[1], 10);
+      const b = parseInt(slashMatch[2], 10);
+      const year = slashMatch[3];
+      // If first number > 12, it's DD/MM/YYYY; otherwise assume DD/MM/YYYY (European convention)
+      const day = a > 12 ? a : a;
+      const month = a > 12 ? b : b;
+      // In European convention (MiCA context), first is day
+      result = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+  }
 
   // Try "December 17, 2025" format
-  const monthNameMatch = text.match(/(\w+)\s+(\d{1,2}),?\s+(\d{4})/);
-  if (monthNameMatch) {
-    const date = new Date(monthNameMatch[0]);
-    if (!isNaN(date.getTime())) {
-      return date.toISOString().split('T')[0];
+  if (!result) {
+    const monthNameMatch = text.match(/(\w+)\s+(\d{1,2}),?\s+(\d{4})/);
+    if (monthNameMatch) {
+      const date = new Date(monthNameMatch[0]);
+      if (!isNaN(date.getTime())) {
+        result = date.toISOString().split('T')[0];
+      }
     }
   }
 
   // Try "17 December 2025" format
-  const dayFirstMatch = text.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/);
-  if (dayFirstMatch) {
-    const date = new Date(dayFirstMatch[0]);
-    if (!isNaN(date.getTime())) {
-      return date.toISOString().split('T')[0];
+  if (!result) {
+    const dayFirstMatch = text.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/);
+    if (dayFirstMatch) {
+      const date = new Date(dayFirstMatch[0]);
+      if (!isNaN(date.getTime())) {
+        result = date.toISOString().split('T')[0];
+      }
     }
   }
 
   // Try to extract from extractDate helper
-  const extracted = extractDate(text);
-  return extracted?.date;
+  if (!result) {
+    const extracted = extractDate(text);
+    result = extracted?.date;
+  }
+
+  // Strip trailing punctuation from extracted date
+  if (result) {
+    result = result.replace(/[.,;:!?]+$/, '');
+  }
+
+  return result;
 }
 
 /**
@@ -1253,6 +1285,11 @@ function cleanFieldContent(content: string): string {
     .join('\n')
     .trim();
 
+  // Strip trailing periods from single-line values (not multi-line prose)
+  if (!cleaned.includes('\n')) {
+    cleaned = cleaned.replace(/[.]+$/, '');
+  }
+
   return cleaned;
 }
 
@@ -1423,6 +1460,10 @@ export function mapPdfToWhitepaper(
       }
 
       if (content && content.length > 1) {
+        // Strip trailing periods from single-line extracted values
+        if (!content.includes('\n')) {
+          content = content.replace(/[.]+$/, '');
+        }
         const value = mapping.transform ? mapping.transform(content, fullText) : content;
 
         if (value !== undefined && value !== null && value !== '') {

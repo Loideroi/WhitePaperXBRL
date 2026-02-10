@@ -318,6 +318,49 @@ describe('mapPdfToWhitepaper', () => {
     });
   });
 
+  describe('Date normalization and trailing punctuation', () => {
+    it('should strip trailing period from date value', () => {
+      const extraction = createExtractionResult([
+        ['partE', 'E.21    Subscription period beginning    2021-01-21.'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      expect(result.data.partE?.publicOfferingStartDate).toBe('2021-01-21');
+    });
+
+    it('should normalize DD/MM/YYYY to ISO format', () => {
+      const extraction = createExtractionResult([
+        ['partE', 'E.22    Subscription period end    04/10/2023'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      expect(result.data.partE?.publicOfferingEndDate).toBe('2023-10-04');
+    });
+
+    it('should strip trailing period from single-line field values', () => {
+      const extraction = createExtractionResult([
+        ['partA', 'A.1    Legal Name    Socios Technologies AG.'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      expect(result.data.partA?.legalName).toBe('Socios Technologies AG');
+    });
+
+    it('should preserve trailing periods in multi-line content', () => {
+      const extraction = createExtractionResult([
+        ['partH', 'H.1    Distributed ledger technology    The Chiliz Chain is a blockchain.\nIt supports smart contracts and tokens.'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      // Multi-line content should preserve natural prose periods
+      expect(result.data.partH?.blockchainDescription).toContain('blockchain.');
+    });
+  });
+
   describe('Multiple sections', () => {
     it('should process multiple sections correctly', () => {
       const extraction = createExtractionResult([
