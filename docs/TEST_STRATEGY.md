@@ -6,6 +6,32 @@ This document outlines the testing strategy for the WhitePaper XBRL platform, in
 
 ---
 
+## Current Test Status
+
+### Existing Test Files (8 unit + 1 E2E)
+
+| File | Category | Description |
+|------|----------|-------------|
+| `tests/lib/pdf/extractor.test.ts` | Unit | PDF text extraction |
+| `tests/lib/pdf/field-mapper.test.ts` | Unit | Field mapping extraction |
+| `tests/lib/xbrl/validator/lei-validator.test.ts` | Unit | LEI format + checksum |
+| `tests/lib/xbrl/validator/existence-engine.test.ts` | Unit | Existence assertions |
+| `tests/lib/xbrl/validator/value-engine.test.ts` | Unit | Value assertions |
+| `tests/lib/xbrl/taxonomy/registry.test.ts` | Unit | Taxonomy loading |
+| `tests/lib/security/sanitize.test.ts` | Unit | Sanitization functions |
+| `tests/lib/utils.test.ts` | Unit | Utility functions |
+| `tests/e2e/home.spec.ts` | E2E | Home page upload workflow |
+
+### Known Gaps
+
+- **Test fixtures are empty**: `tests/fixtures/pdfs/` and `tests/fixtures/whitepapers/` directories exist but contain no files
+- **No API route tests**: `tests/api/` directory is empty — no tests for upload, validate, or generate endpoints
+- **No integration test utilities**: `tests/utils/` has no mock-request or XML validator helpers
+- **No iXBRL generator tests**: No tests for `document-generator.ts`, `context-builder.ts`, or `fact-builder.ts`
+- **No component tests**: No React component tests for UploadZone, field editors, or ValidationDashboard
+
+---
+
 ## Testing Pyramid
 
 ```

@@ -4,7 +4,7 @@
 **Version:** 1.0
 **Date:** January 27, 2026
 **Author:** Claude Code
-**Status:** Draft
+**Status:** In Progress (Phases 0-5 complete, Phase 6-8 in progress)
 
 ---
 
@@ -31,7 +31,7 @@
 
 ### 1.1 Product Overview
 
-WhitePaper XBRL is a web-based platform that enables legal representatives and compliance teams to transform text-based PDF crypto-asset whitepapers (generated from Google Docs or similar sources) into XBRL-compliant files that meet the requirements of the Markets in Crypto-Assets Regulation (MiCA) under EU law and Malta's regulatory framework.
+WhitePaper XBRL is a web-based platform that enables legal representatives and compliance teams to transform crypto-asset whitepaper documents (PDF, DOCX, ODT, RTF) into XBRL-compliant files that meet the requirements of the Markets in Crypto-Assets Regulation (MiCA) under EU law and Malta's regulatory framework.
 
 ### 1.2 Key Value Proposition
 
@@ -324,9 +324,9 @@ Create a streamlined, self-service platform where legal representatives can uplo
 
 | Component | Technology | Rationale |
 |-----------|------------|-----------|
-| **Frontend** | Next.js 14+ (App Router) | Modern React framework, excellent Vercel integration |
+| **Frontend** | Next.js 16 (App Router) | Modern React framework, excellent Vercel integration |
 | **UI Framework** | Tailwind CSS + shadcn/ui | Rapid development, professional look |
-| **PDF Processing** | pdf-lib, pdf-parse, or pdf.js | Client/server PDF text extraction |
+| **Document Processing** | pdf-parse, officeparser | PDF text extraction + DOCX/ODT/RTF support |
 | **XBRL Engine** | Custom TypeScript implementation | Full control over iXBRL generation |
 | **Validation** | Arelle (Python) via API or custom rules | Industry-standard XBRL validator |
 | **Hosting** | Vercel | Specified requirement, excellent DX |

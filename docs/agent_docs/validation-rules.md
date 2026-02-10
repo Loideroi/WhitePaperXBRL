@@ -4,6 +4,13 @@
 
 This document describes the validation rules that must be implemented to ensure iXBRL documents comply with ESMA's MiCA taxonomy requirements.
 
+### Assertion Totals (ESMA Reporting Manual)
+
+- **257** existence assertions (required fields present)
+- **223** value assertions (field value formats/constraints)
+- **6** LEI assertions (format + checksum + optional GLEIF)
+- **486 total** assertions
+
 ---
 
 ## Validation Categories
@@ -27,6 +34,15 @@ This document describes the validation rules that must be implemented to ensure 
 - 257 existence assertions
 - 223 value assertions
 - 6 LEI assertions
+
+### 5. ESMA Filing Rules (Reporting Manual)
+- Duplicate fact validation
+- Language (`xml:lang`) requirements
+- Hidden section rules
+- CSS restrictions on tagged facts
+- `decimals` vs `precision` requirement
+- Single entity requirement
+- Prohibited elements (`<base>`, `xml:base`)
 
 ---
 
@@ -89,7 +105,7 @@ This document describes the validation rules that must be implemented to ensure 
 | CTX-004 | Period must be instant or duration | ERROR |
 | CTX-005 | Period date format: yyyy-mm-dd (no time) | ERROR |
 | CTX-006 | Use scenario for dimensions, not segment | ERROR |
-| CTX-007 | One entity identifier per document | ERROR |
+| CTX-007 | One entity identifier per document (all entity identifiers must be identical) | ERROR |
 
 ### Unit Rules
 
@@ -107,7 +123,7 @@ This document describes the validation rules that must be implemented to ensure 
 |---------|-------------|----------|
 | FCT-001 | Fact must reference valid context | ERROR |
 | FCT-002 | Numeric fact must reference valid unit | ERROR |
-| FCT-003 | Use 'decimals' attribute, not 'precision' | ERROR |
+| FCT-003 | Use `decimals` attribute, not `precision` | ERROR |
 | FCT-004 | No inconsistent duplicate facts (numeric) | ERROR |
 | FCT-005 | No inconsistent duplicate facts (non-numeric) | WARNING |
 | FCT-006 | Unique fact ID recommended | WARNING |
@@ -149,7 +165,47 @@ This document describes the validation rules that must be implemented to ensure 
 |---------|-------------|----------|
 | LNG-001 | `xml:lang` on root HTML element | ERROR |
 | LNG-002 | `xml:lang` on `ix:references` | ERROR |
-| LNG-003 | All text facts have `xml:lang` | ERROR |
+| LNG-003 | All text facts have `xml:lang` in scope | ERROR |
+
+### Hidden Section Rules
+
+| Rule ID | Description | Severity |
+|---------|-------------|----------|
+| HID-001 | `transformableElementIncludedInHiddenSection`: transformable elements must not be placed in `ix:hidden` | ERROR |
+| HID-002 | CSS `display:none` must not be applied to tagged (ix:nonFraction, ix:nonNumeric) facts in the visible document | ERROR |
+
+---
+
+## ESMA Filing Rules (Reporting Manual)
+
+These rules come from the ESMA ESEF/MiCA Reporting Manual and apply to all iXBRL filings.
+
+### Duplicate Fact Validation
+
+| Rule ID | Description | Severity |
+|---------|-------------|----------|
+| DUP-001 | Inconsistent numeric duplicate facts (same concept, context, unit, but different value) | ERROR |
+| DUP-002 | Inconsistent non-numeric duplicate facts (same concept, context, xml:lang, but different value) | WARNING |
+
+Two facts are "duplicates" when they report the same concept in the same context (and same unit for numeric facts, same `xml:lang` for non-numeric facts). Duplicate facts with identical values are acceptable; only inconsistent duplicates trigger validation messages.
+
+### Decimals vs Precision
+
+Numeric facts must use the `decimals` attribute. The `precision` attribute is not permitted.
+
+### Single Entity Requirement
+
+All `xbrli:identifier` elements across all contexts in the document must contain the same value (the LEI of the reporting entity). Multiple distinct entity identifiers in a single filing are not allowed.
+
+### Prohibited Elements and Attributes
+
+| Rule ID | Description | Severity |
+|---------|-------------|----------|
+| PRH-001 | No `<base>` HTML element | ERROR |
+| PRH-002 | No `xml:base` attribute on any element | ERROR |
+| PRH-003 | No `<script>` elements | ERROR |
+| PRH-004 | No event handler attributes (onclick, onload, etc.) | ERROR |
+| PRH-005 | No embedded executable content (Java applets, Flash, ActiveX) | ERROR |
 
 ---
 
@@ -162,20 +218,27 @@ Check that required facts are present.
 #### Table 2 (OTHR) - 72 assertions
 
 ```typescript
-// Example assertion structure
+// Example assertion structure (from existence-engine.ts)
 interface ExistenceAssertion {
   id: string;
   description: string;
-  requiredElement: string;
-  condition?: string;  // Optional conditional logic
+  fieldPath: string;
+  elementName: string;
+  tokenTypes: TokenType[];
   severity: 'ERROR' | 'WARNING';
+  condition?: {
+    fieldPath: string;
+    value?: unknown;
+  };
 }
 
 // Example
 const assertion: ExistenceAssertion = {
-  id: 'EXS-T2-001',
-  description: 'Offeror LEI must be provided',
-  requiredElement: 'mica:OfferorLegalEntityIdentifier',
+  id: 'EXS-A-002',
+  description: 'Offeror LEI is required',
+  fieldPath: 'partA.lei',
+  elementName: 'mica:OfferorLegalEntityIdentifier',
+  tokenTypes: ['OTHR', 'ART', 'EMT'],
   severity: 'ERROR',
 };
 ```
@@ -211,19 +274,34 @@ Check relationships between field values.
 #### Cross-Field Validations
 
 ```typescript
+// Example assertion structure (from value-engine.ts)
 interface ValueAssertion {
   id: string;
   description: string;
-  formula: string;  // Logical expression
+  tokenTypes: TokenType[];
   severity: 'ERROR' | 'WARNING';
+  validate: (data: Partial<WhitepaperData>) => ValidationError | null;
 }
 
 // Example: End date must be after start date
 const assertion: ValueAssertion = {
-  id: 'VAL-T2-015',
+  id: 'VAL-001',
   description: 'Public offering end date must be after start date',
-  formula: 'mica:PublicOfferingEndDate > mica:PublicOfferingStartDate',
+  tokenTypes: ['OTHR', 'ART', 'EMT'],
   severity: 'ERROR',
+  validate: (data) => {
+    const startDate = parseDate(data.partE?.publicOfferingStartDate);
+    const endDate = parseDate(data.partE?.publicOfferingEndDate);
+    if (startDate && endDate && endDate <= startDate) {
+      return {
+        ruleId: 'VAL-001',
+        severity: 'ERROR',
+        message: 'Public offering end date must be after start date',
+        fieldPath: 'partE.publicOfferingEndDate',
+      };
+    }
+    return null;
+  },
 };
 ```
 
@@ -233,9 +311,17 @@ const assertion: ValueAssertion = {
 |----|-------------|---------|
 | VAL-001 | End date after start date | `endDate > startDate` |
 | VAL-002 | Total supply positive | `totalSupply > 0` |
-| VAL-003 | Percentage in range | `0 <= percentage <= 1` |
-| VAL-004 | Energy below threshold or report | `energy < 500000 OR renewableReported` |
-| VAL-005 | LEI checksum valid | `validateLEIChecksum(lei)` |
+| VAL-003 | Token price positive | `tokenPrice > 0` |
+| VAL-004 | Max subscription goal positive | `maxSubscriptionGoal > 0` |
+| VAL-005 | Renewable energy percentage in range | `0 <= percentage <= 100` |
+| VAL-006 | Country code format | ISO 3166-1 alpha-2 (2 uppercase letters) |
+| VAL-007 | Website URL format | Must start with `http://` or `https://` |
+| VAL-008 | Email format | Valid email pattern |
+| VAL-009 | Document date format | `YYYY-MM-DD` |
+| VAL-010 | Language code format | ISO 639-1 (2 lowercase letters) |
+| VAL-011 | Public offering completeness | If public offering, price or goal required |
+| VAL-012 | Token symbol format | Should be uppercase |
+| VAL-013 | Energy consumption non-negative | `energyConsumption >= 0` |
 
 ---
 
@@ -247,7 +333,9 @@ const assertion: ValueAssertion = {
 const LEI_REGEX = /^[A-Z0-9]{18}[0-9]{2}$/;
 
 function isValidLEIFormat(lei: string): boolean {
-  return LEI_REGEX.test(lei);
+  if (!lei || typeof lei !== 'string') return false;
+  if (lei.length !== 20) return false;
+  return LEI_REGEX.test(lei.toUpperCase());
 }
 ```
 
@@ -257,21 +345,22 @@ function isValidLEIFormat(lei: string): boolean {
 function validateLEIChecksum(lei: string): boolean {
   if (!isValidLEIFormat(lei)) return false;
 
-  // Convert letters to numbers (A=10, B=11, ...)
-  const numericLei = lei
-    .split('')
-    .map(char => {
-      const code = char.charCodeAt(0);
-      if (code >= 65 && code <= 90) {
-        return (code - 55).toString(); // A=10, B=11, etc.
-      }
-      return char;
-    })
-    .join('');
+  const upperLei = lei.toUpperCase();
+
+  // Convert letters to numbers (A=10, B=11, ..., Z=35)
+  let numericString = '';
+  for (const char of upperLei) {
+    const code = char.charCodeAt(0);
+    if (code >= 65 && code <= 90) {
+      numericString += (code - 55).toString();
+    } else {
+      numericString += char;
+    }
+  }
 
   // Modulo 97 check (similar to IBAN)
   let remainder = 0;
-  for (const digit of numericLei) {
+  for (const digit of numericString) {
     remainder = (remainder * 10 + parseInt(digit, 10)) % 97;
   }
 
@@ -282,133 +371,212 @@ function validateLEIChecksum(lei: string): boolean {
 ### GLEIF API Validation (Optional)
 
 ```typescript
-async function validateLEIWithGLEIF(lei: string): Promise<{
-  valid: boolean;
-  entityName?: string;
-  status?: string;
-}> {
+async function validateLEIWithGLEIF(lei: string): Promise<LEIValidationResult> {
+  const errors: ValidationError[] = [];
+
+  if (!isValidLEIFormat(lei)) {
+    errors.push({ ruleId: 'LEI-001', severity: 'ERROR', message: '...', element: 'lei' });
+    return { valid: false, errors };
+  }
+
+  if (!validateLEIChecksum(lei)) {
+    errors.push({ ruleId: 'LEI-002', severity: 'ERROR', message: '...', element: 'lei' });
+    return { valid: false, errors };
+  }
+
   try {
     const response = await fetch(
-      `https://api.gleif.org/api/v1/lei-records/${lei}`
+      `https://api.gleif.org/api/v1/lei-records/${lei}`,
+      {
+        headers: { Accept: 'application/vnd.api+json' },
+        signal: AbortSignal.timeout(5000),
+      }
     );
 
     if (!response.ok) {
-      return { valid: false };
+      if (response.status === 404) {
+        errors.push({
+          ruleId: 'LEI-003',
+          severity: 'WARNING',
+          message: 'LEI not found in GLEIF database',
+          element: 'lei',
+        });
+      }
+      return { valid: true, errors };
     }
 
     const data = await response.json();
+    const attributes = data?.data?.attributes;
+
+    if (attributes?.registration?.status !== 'ISSUED') {
+      errors.push({
+        ruleId: 'LEI-004',
+        severity: 'WARNING',
+        message: `LEI status is ${attributes.registration?.status} - should be ISSUED`,
+        element: 'lei',
+      });
+    }
+
     return {
-      valid: true,
-      entityName: data.data.attributes.entity.legalName.name,
-      status: data.data.attributes.registration.status,
+      valid: errors.length === 0,
+      errors,
+      entityInfo: {
+        name: attributes.entity?.legalName?.name,
+        status: attributes.registration?.status,
+        country: attributes.entity?.jurisdiction,
+      },
     };
   } catch {
-    // API failure - fall back to format validation only
-    return { valid: isValidLEIFormat(lei) };
+    return { valid: true, errors };
   }
 }
 ```
+
+### LEI Rule IDs
+
+| Rule ID | Description | Severity |
+|---------|-------------|----------|
+| LEI-000 | LEI is required (missing or empty) | ERROR |
+| LEI-001 | Invalid LEI format (must be 18 alphanumeric + 2 check digits) | ERROR |
+| LEI-002 | LEI checksum validation failed (mod-97) | ERROR |
+| LEI-003 | LEI not found in GLEIF database | WARNING |
+| LEI-004 | LEI registration status is not ISSUED | WARNING |
+| LEI-*-ISSUER | Issuer LEI validation (same checks, prefixed) | varies |
+| LEI-*-OPERATOR | Operator LEI validation (same checks, prefixed) | varies |
+
+The `validateAllLEIs()` function checks up to 3 LEIs (offeror, issuer, operator) and returns combined errors with `fieldPath` set to `partA.lei`, `partB.lei`, or `partC.lei` respectively.
 
 ---
 
 ## Implementation Architecture
 
-### Validation Pipeline
+### File Structure
+
+| File | Purpose |
+|------|---------|
+| `src/lib/xbrl/validator/orchestrator.ts` | Runs all validations, aggregates results |
+| `src/lib/xbrl/validator/existence-engine.ts` | Checks required fields are present |
+| `src/lib/xbrl/validator/value-engine.ts` | Checks field value formats/constraints |
+| `src/lib/xbrl/validator/lei-validator.ts` | LEI format + checksum + optional GLEIF |
+| `src/lib/xbrl/validator/index.ts` | Barrel exports for all validator modules |
+
+Assertions are coded directly in the engine files as TypeScript arrays/objects. There is no formula linkbase XML parsing at runtime and no `AssertionRegistry` class.
+
+### Validation Modes
+
+The orchestrator (`orchestrator.ts`) exposes four functions:
+
+#### `validateWhitepaper(data, tokenType, options)` - Full Validation
+
+Runs all three engines sequentially: LEI + existence + value. Returns a `DetailedValidationResult` with errors/warnings grouped by category and assertion counts.
+
+```typescript
+async function validateWhitepaper(
+  data: Partial<WhitepaperData>,
+  tokenType: TokenType,
+  options?: ValidationOptions
+): Promise<DetailedValidationResult>
+```
+
+Options:
+- `checkGLEIF?: boolean` -- whether to call the GLEIF API for LEI verification
+- `stopOnFirstError?: boolean` -- whether to halt on first error
+- `skipRules?: string[]` -- rule IDs to skip (filtered before aggregation)
+
+#### `quickValidate(data, tokenType)` - Fast Mode
+
+Runs LEI + existence only (skips value assertions). Useful for real-time form validation where speed matters.
+
+```typescript
+function quickValidate(
+  data: Partial<WhitepaperData>,
+  tokenType: TokenType
+): { valid: boolean; errorCount: number; errors: ValidationError[] }
+```
+
+#### `validateField(data, fieldPath, tokenType)` - Single Field Validation
+
+Runs all engines but filters results to only errors matching the given `fieldPath`. Used by the editor UI to show per-field validation messages.
+
+```typescript
+function validateField(
+  data: Partial<WhitepaperData>,
+  fieldPath: string,
+  tokenType: TokenType
+): ValidationError[]
+```
+
+#### `getValidationRequirements(tokenType)` - Assertion Counts
+
+Returns the total number of assertions for a given token type (existence + value + 6 LEI). Used for display in the UI (e.g., progress bars).
+
+```typescript
+function getValidationRequirements(tokenType: TokenType): {
+  existence: { total: number; required: number; recommended: number; byPart: Record<string, number> };
+  value: { total: number; required: number; recommended: number };
+  total: number; // existence.total + value.total + 6
+}
+```
+
+### Validation Pipeline (orchestrator.ts)
+
+```typescript
+// Simplified flow inside validateWhitepaper():
+
+// 1. LEI Validation (format + checksum, optional GLEIF)
+const leiErrors = validateAllLEIs(data.partA?.lei, partB?.lei, partC?.lei);
+
+// 2. Existence Assertions (required fields present)
+const existenceResult = validateExistenceAssertions(data, tokenType);
+
+// 3. Value Assertions (field value formats/constraints)
+const valueResult = validateValueAssertions(data, tokenType);
+
+// 4. Aggregate by category, apply skipRules filter, compute counts
+return {
+  valid: allErrors.length === 0,
+  errors: allErrors,
+  warnings: allWarnings,
+  summary: { totalAssertions, passed, errors, warnings },
+  byCategory: { lei, existence, value },
+  assertionCounts: { existence, value, lei },
+};
+```
+
+### Result Types
 
 ```typescript
 interface ValidationResult {
   valid: boolean;
   errors: ValidationError[];
-  warnings: ValidationWarning[];
+  warnings: ValidationError[];
+  summary: {
+    totalAssertions: number;
+    passed: number;
+    errors: number;
+    warnings: number;
+  };
 }
 
 interface ValidationError {
   ruleId: string;
-  severity: 'ERROR';
+  severity: 'ERROR' | 'WARNING';
   message: string;
   element?: string;
-  location?: string;
+  fieldPath?: string;
 }
 
-interface ValidationWarning {
-  ruleId: string;
-  severity: 'WARNING';
-  message: string;
-  element?: string;
-  suggestion?: string;
-}
-
-async function validateWhitepaper(
-  data: WhitepaperData,
-  tokenType: 'OTHR' | 'ART' | 'EMT'
-): Promise<ValidationResult> {
-  const errors: ValidationError[] = [];
-  const warnings: ValidationWarning[] = [];
-
-  // 1. Schema validation
-  const schemaResult = validateSchema(data);
-  errors.push(...schemaResult.errors);
-
-  // 2. XBRL 2.1 validation
-  const xbrlResult = validateXBRL(data);
-  errors.push(...xbrlResult.errors);
-  warnings.push(...xbrlResult.warnings);
-
-  // 3. Inline XBRL validation
-  const ixbrlResult = validateInlineXBRL(data);
-  errors.push(...ixbrlResult.errors);
-
-  // 4. Existence assertions
-  const existenceResult = validateExistenceAssertions(data, tokenType);
-  errors.push(...existenceResult.errors);
-
-  // 5. Value assertions
-  const valueResult = validateValueAssertions(data, tokenType);
-  errors.push(...valueResult.errors);
-  warnings.push(...valueResult.warnings);
-
-  // 6. LEI validation
-  const leiResult = await validateLEI(data.offerorLEI);
-  errors.push(...leiResult.errors);
-
-  return {
-    valid: errors.length === 0,
-    errors,
-    warnings,
+interface DetailedValidationResult extends ValidationResult {
+  byCategory: {
+    lei: { errors: ValidationError[]; warnings: ValidationError[] };
+    existence: { errors: ValidationError[]; warnings: ValidationError[] };
+    value: { errors: ValidationError[]; warnings: ValidationError[] };
   };
-}
-```
-
-### Assertion Registry
-
-```typescript
-// Load assertions from formula linkbase
-class AssertionRegistry {
-  private existenceAssertions: Map<string, ExistenceAssertion[]>;
-  private valueAssertions: Map<string, ValueAssertion[]>;
-
-  constructor() {
-    this.existenceAssertions = new Map();
-    this.valueAssertions = new Map();
-  }
-
-  async loadAssertions(tokenType: 'OTHR' | 'ART' | 'EMT'): Promise<void> {
-    const tableNum = { OTHR: '2', ART: '3', EMT: '4' }[tokenType];
-    const formulaPath = `taxonomy/mica-for-table${tableNum}.xml`;
-
-    const parsed = await parseFormulaLinkbase(formulaPath);
-
-    this.existenceAssertions.set(tokenType, parsed.existence);
-    this.valueAssertions.set(tokenType, parsed.value);
-  }
-
-  getExistenceAssertions(tokenType: string): ExistenceAssertion[] {
-    return this.existenceAssertions.get(tokenType) ?? [];
-  }
-
-  getValueAssertions(tokenType: string): ValueAssertion[] {
-    return this.valueAssertions.get(tokenType) ?? [];
-  }
+  assertionCounts: {
+    existence: { total: number; passed: number; failed: number };
+    value: { total: number; passed: number; failed: number };
+    lei: { total: number; passed: number; failed: number };
+  };
 }
 ```
 
@@ -425,7 +593,7 @@ function formatErrorMessage(error: ValidationError): string {
     'CTX-005': 'Dates must be in yyyy-mm-dd format without time components',
     'FCT-002': 'Numeric values must have a unit of measure specified',
     'ESC-001': 'Text blocks must have escape="true" attribute',
-    'EXS-T2-001': 'The offeror\'s Legal Entity Identifier (LEI) is required',
+    'EXS-A-002': 'The offeror\'s Legal Entity Identifier (LEI) is required',
     'VAL-001': 'The end date must be after the start date',
   };
 
@@ -469,7 +637,7 @@ describe('Existence Assertions', () => {
       const result = validateExistenceAssertions(data, 'OTHR');
 
       expect(result.errors).toContainEqual(
-        expect.objectContaining({ ruleId: 'EXS-T2-001' })
+        expect.objectContaining({ ruleId: 'EXS-A-002' })
       );
     });
 
@@ -515,49 +683,31 @@ describe('LEI Validation', () => {
 
 ## Performance Considerations
 
-### Assertion Caching
+### Assertion Evaluation
 
-```typescript
-// Cache parsed assertions in memory
-const assertionCache = new Map<string, {
-  existence: ExistenceAssertion[];
-  value: ValueAssertion[];
-  loadedAt: number;
-}>();
-
-async function getAssertions(tokenType: string) {
-  const cached = assertionCache.get(tokenType);
-  if (cached && Date.now() - cached.loadedAt < 3600000) {
-    return cached;
-  }
-
-  const loaded = await loadAssertions(tokenType);
-  assertionCache.set(tokenType, {
-    ...loaded,
-    loadedAt: Date.now(),
-  });
-
-  return loaded;
-}
-```
+Assertions are defined as static TypeScript arrays in `existence-engine.ts` and `value-engine.ts`. No file I/O or XML parsing is needed at runtime -- all assertions are loaded when the module is imported. This makes validation fast and deterministic.
 
 ### Parallel Validation
 
 ```typescript
-async function validateAll(data: WhitepaperData, tokenType: string) {
-  // Run independent validations in parallel
-  const [schema, xbrl, ixbrl, existence, value, lei] = await Promise.all([
-    validateSchema(data),
-    validateXBRL(data),
-    validateInlineXBRL(data),
-    validateExistenceAssertions(data, tokenType),
-    validateValueAssertions(data, tokenType),
-    validateLEI(data.offerorLEI),
-  ]);
-
-  return mergeResults([schema, xbrl, ixbrl, existence, value, lei]);
-}
+// The orchestrator runs engines sequentially, but each engine
+// iterates its own assertion list independently. For the full
+// validateWhitepaper() call, the flow is:
+//
+// 1. validateAllLEIs()           -- synchronous (unless GLEIF)
+// 2. validateExistenceAssertions() -- synchronous
+// 3. validateValueAssertions()     -- synchronous
+//
+// GLEIF API is the only async step and is optional.
 ```
+
+### Quick Validation Path
+
+For real-time form feedback, use `quickValidate()` which skips value assertions entirely. This is faster because value assertions run custom validation functions, while existence assertions are simple "is field present?" checks.
+
+### Field-Level Validation
+
+For per-field validation in the editor UI, `validateField()` runs all engines but filters results by `fieldPath`. This is acceptable for single-field checks but should not be called in a loop for all fields -- use `validateWhitepaper()` instead and filter client-side.
 
 ---
 

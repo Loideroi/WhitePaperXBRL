@@ -1,8 +1,38 @@
-# PDF Extraction Guide - WhitePaper XBRL
+# Document Extraction Guide - WhitePaper XBRL
 
 ## Overview
 
-This document describes the PDF extraction strategy for converting whitepaper PDFs into structured data that can be transformed into iXBRL format.
+This document describes the document extraction strategy for converting whitepaper documents into structured data that can be transformed into iXBRL format. The system supports multiple document formats and uses a three-pass field mapping approach optimized for the ESMA MiCA whitepaper table structure.
+
+---
+
+## Supported Formats
+
+The extraction pipeline supports four document formats via two libraries:
+
+| Format | Library | MIME Type |
+|--------|---------|-----------|
+| PDF (.pdf) | `pdf-parse` | `application/pdf` |
+| DOCX (.docx) | `officeparser` (toText()) | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` |
+| ODT (.odt) | `officeparser` (toText()) | `application/vnd.oasis.opendocument.text` |
+| RTF (.rtf) | `officeparser` (toText()) | `application/rtf`, `text/rtf` |
+
+### Format Detection
+
+Format detection uses a two-step strategy:
+
+1. **MIME type lookup** -- `MIME_TO_FORMAT` mapping (primary)
+2. **Filename extension fallback** -- `EXTENSION_TO_FORMAT` mapping (secondary)
+
+### Magic Byte Validation
+
+The system validates file integrity using magic bytes at the start of file buffers:
+
+| Format | Magic Bytes | Hex |
+|--------|-------------|-----|
+| PDF | `%PDF` | `0x25504446` |
+| DOCX / ODT (ZIP-based) | `PK..` | `0x504B0304` |
+| RTF | `{\rtf` | `0x7B5C727466` |
 
 ---
 
@@ -10,625 +40,223 @@ This document describes the PDF extraction strategy for converting whitepaper PD
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   Upload    │───>│   Parse     │───>│   Map       │───>│  Validate   │
-│   PDF       │    │   Text      │    │   Fields    │    │  Data       │
+│   Upload     │───>│   Extract   │───>│   Map        │───>│  Validate   │
+│   Document   │    │   Text      │    │   Fields     │    │  Data       │
 └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
 ```
 
----
+### Step 1: Unified Document Extraction
 
-## Step 1: PDF Parsing
+The entry point is `extractDocument()` in `src/lib/document/extractor.ts`. It dispatches based on detected format:
 
-### Recommended Library
-
-**pdf-parse** - Simple text extraction, no rendering
-
-```typescript
-import pdfParse from 'pdf-parse';
-
-async function extractPdfText(buffer: Buffer): Promise<PdfContent> {
-  const data = await pdfParse(buffer);
-
-  return {
-    text: data.text,
-    pages: data.numpages,
-    metadata: data.info,
-  };
-}
-```
-
-### Alternative: pdf.js
-
-For more complex layouts, use pdf.js:
+- **PDF**: Delegates to `extractPdfText()` in `src/lib/pdf/extractor.ts`, which uses `pdf-parse` to extract text, page count, metadata, and detected sections.
+- **DOCX / ODT / RTF**: Uses `officeparser`'s `parseOffice()` function, then calls `toText()` on the result for proper text extraction. Falls back to manually walking content nodes if `toText()` is unavailable.
 
 ```typescript
-import * as pdfjsLib from 'pdfjs-dist';
-
-async function extractWithPdfJs(buffer: ArrayBuffer): Promise<string[]> {
-  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-  const pages: string[] = [];
-
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const text = content.items
-      .map((item: any) => item.str)
-      .join(' ');
-    pages.push(text);
-  }
-
-  return pages;
-}
+export async function extractDocument(
+  buffer: Buffer,
+  mimeType?: string,
+  filename?: string
+): Promise<DocumentExtractionResult>
 ```
 
----
+Returns a `DocumentExtractionResult` containing:
+- `text` -- Full extracted text
+- `format` -- Detected `SupportedFormat`
+- `pages` -- Page count (PDF only)
+- `metadata` -- Title, author, subject, creator, dates
+- `sections` -- `Map<string, string>` of detected MiCA sections
 
-## Step 2: Content Parsing
+### Step 2: PDF Section Detection
 
-### Section Detection
-
-Whitepapers follow a structured format with Parts A-J. Detect sections using regex patterns:
+For PDF documents, `detectSections()` in `src/lib/pdf/extractor.ts` identifies MiCA whitepaper structure using regex patterns:
 
 ```typescript
 const SECTION_PATTERNS: Record<string, RegExp> = {
   summary: /^summary$/im,
-  partA: /^part\s*a[:\s]/im,
-  partB: /^part\s*b[:\s]/im,
-  partC: /^part\s*c[:\s]/im,
-  partD: /^part\s*d[:\s]/im,
-  partE: /^part\s*e[:\s]/im,
-  partF: /^part\s*f[:\s]/im,
-  partG: /^part\s*g[:\s]/im,
-  partH: /^part\s*h[:\s]/im,
-  partI: /^part\s*i[:\s]/im,
-  partJ: /^part\s*j[:\s]/im,
+  disclaimer: /^(disclaimer|important\s*notice)/im,
+  partA: /^part\s*a[:\s]|^a\.\s*information/im,
+  partB: /^part\s*b[:\s]|^b\.\s*information/im,
+  // ... through partJ
 };
+```
 
-function detectSections(text: string): Map<string, string> {
-  const sections = new Map<string, string>();
-  const lines = text.split('\n');
+Detection works in two passes:
+1. Find all section start positions by scanning lines
+2. Extract content between consecutive section markers
 
-  let currentSection: string | null = null;
-  let sectionContent: string[] = [];
+### Step 3: Field Mapping (Three-Pass Strategy)
 
-  for (const line of lines) {
-    for (const [sectionName, pattern] of Object.entries(SECTION_PATTERNS)) {
-      if (pattern.test(line)) {
-        // Save previous section
-        if (currentSection) {
-          sections.set(currentSection, sectionContent.join('\n'));
-        }
-        currentSection = sectionName;
-        sectionContent = [];
-        break;
-      }
-    }
-    if (currentSection) {
-      sectionContent.push(line);
-    }
-  }
+The field mapping engine in `src/lib/pdf/field-mapper.ts` (1487 lines) uses three passes to maximize extraction coverage.
 
-  // Save last section
-  if (currentSection) {
-    sections.set(currentSection, sectionContent.join('\n'));
-  }
+---
 
-  return sections;
+## Three-Pass Field Mapping
+
+### Pass 1: MiCA Table Format (Section Number + Field Name)
+
+Scans the full document text for MiCA field numbers (e.g., `A.1`, `E.21`, `S.8`) paired with known field names. This is the highest-confidence extraction method.
+
+The `extractAllRawFields()` function performs a comprehensive scan:
+
+1. Builds a regex matching all MiCA field patterns: `[A-JS].digit`, ranges like `B.2-B12`, and simple numbers `01`-`10`
+2. Finds all field markers and their positions in the document
+3. Extracts content between consecutive field markers (content of field N ends where field N+1 begins)
+4. Expands range fields (e.g., `B.2-B12` populates `B.2` through `B.12`)
+5. Removes field labels from the start of content using `OTHR_FIELD_DEFINITIONS`
+6. Applies `smartJoinLines()` and `cleanFieldContent()` for proper formatting
+
+For typed fields, `mapPdfToWhitepaper()` iterates over `MICA_SECTION_MAPPINGS` and uses:
+- `extractTableContent()` -- For single-line fields
+- `extractMultiLineTableContent()` -- For fields with paragraph content
+
+### Pass 2: Pattern-Based Fallback
+
+For fields not found in Pass 1, the engine searches the full text using regex patterns defined in `MICA_SECTION_MAPPINGS` (60+ mapping rules). Each mapping rule specifies:
+
+```typescript
+interface MiCASectionMapping {
+  sectionNumbers: string[];      // e.g., ['A.1']
+  fieldNames: string[];          // e.g., ['Name', 'Legal Name', 'Company Name']
+  patterns: RegExp[];            // Fallback regex patterns
+  targetPath: string;            // e.g., 'partA.legalName'
+  transform?: (value: string, fullText: string) => unknown;
+  confidence: ConfidenceLevel;
+  multiLine?: boolean;
 }
 ```
 
-### Table Extraction
+When a pattern matches, the engine:
+1. Extracts content after the match point
+2. For single-line: captures until next numbered item or newline
+3. For multi-line: captures until next section marker or 2000 character limit
+4. Applies the confidence multiplier of 0.7 (see Confidence Scoring below)
 
-The example whitepaper uses table format (No. | Field | Content):
+### Pass 3: Label Matching from OTHR_FIELD_DEFINITIONS
+
+The `extractFieldsByLabelPattern()` function iterates over all `OTHR_FIELD_DEFINITIONS` entries and attempts to match by field number + label combination for any fields not yet extracted. This populates the `rawFields` record that provides fallback content for iXBRL generation.
+
+---
+
+## Text Processing Algorithms
+
+### smartJoinLines
+
+PDF text extraction often introduces artificial line breaks from page layout. The `smartJoinLines()` function intelligently rejoins wrapped text:
+
+1. Preserves intentional paragraph breaks (double newlines)
+2. Normalizes whitespace around single newlines
+3. Joins hyphenated words split across lines (e.g., `tech-\nnology` becomes `technology`)
+4. Joins lines where a lowercase letter follows a break (mid-sentence continuation)
+5. Joins lines where content ends without terminal punctuation and next line starts with a capital letter
+6. Handles lines ending with common connectors (`the`, `a`, `of`, `in`, `to`, `for`, `and`, `or`, `with`, `by`, `as`, `is`, `are`, etc.)
+
+### Not Applicable Section Detection
+
+The `populateNotApplicableSections()` function detects patterns like "Part B does not apply" or "Issuer is the same as Offeror" and fills in all fields in the affected range with the explanation text. Currently handles:
+
+- **Part B** (B.2 through B.13): Triggered by "Part B does not apply" or "Issuer is same as Offeror"
+- **Part C** (C.2 through C.15): Triggered by "Part C does not apply" or "Non-applicability of Part C"
+
+### Field Number Normalization
+
+Field numbers are normalized to a standard format:
+- Simple numbers `1`-`10` become zero-padded `01`-`10`
+- Letters without dots (`S8`) become dotted (`S.8`)
+- Ranges (`B.2-B12`) are parsed and expanded into individual field numbers
+
+---
+
+## Transform Functions
+
+The field mapper applies specialized transform functions to extract structured values from raw text.
+
+### Text Cleaning
+
+| Function | Purpose |
+|----------|---------|
+| `cleanLegalName` | Removes "Name" prefix, normalizes whitespace |
+| `cleanCryptoAssetName` | Strips "Crypto-asset name" prefix and "project" suffix |
+| `cleanTickerSymbol` | Extracts `$SYMBOL` pattern or first uppercase token, removes `$` prefix |
+| `cleanTextContent` | Joins broken lines, collapses whitespace |
+
+### Value Extraction
+
+| Function | Purpose | Example Input | Example Output |
+|----------|---------|---------------|----------------|
+| `extractTokenPrice` | Parses price from USD/EUR patterns | `"0.50 $USD"` | `0.50` |
+| `extractCurrency` | Detects USD or EUR | `"0.50 $USD"` | `"USD"` |
+| `extractTokenStandard` | Finds CAP-20, ERC-20, BEP-20 | `"CAP-20 Token Standard"` | `"CAP-20"` |
+| `extractTotalSupply` | Parses numbers with million/billion | `"10 million"` | `10000000` |
+| `extractMaxSubscriptionGoal` | Parses monetary amounts | `"25,000 USD"` | `25000` |
+| `extractEnergyConsumption` | Extracts kWh values | `"86.68 kWh"` | `86.68` |
+| `extractRenewableEnergy` | Extracts percentage or detects N/A | `"45.2%"` | `45.2` |
+| `extractDateValue` | Parses dates to ISO format | `"December 17, 2025"` | `"2025-12-17"` |
+
+### Entity Extraction
+
+| Function | Purpose |
+|----------|---------|
+| `extractLEIValue` | Handles standard LEI (20 chars), Swiss UID (`CHE-XXX.XXX.XXX`), and "Not applicable" |
+| `extractCountryCode` | Maps country names/cities to ISO 2-letter codes (25+ countries) |
+| `extractUrl` | Extracts `https://` URLs or constructs from domain patterns |
+| `extractEmail` | Extracts email addresses via standard regex |
+
+### Domain-Specific Extraction
+
+| Function | Purpose |
+|----------|---------|
+| `extractBlockchainNetwork` | Scans for known blockchains using pattern matching and `KNOWN_BLOCKCHAINS` list |
+| `extractConsensusMechanism` | Matches against `KNOWN_CONSENSUS_MECHANISMS` pattern list |
+| `extractConsensusMechanismFromDLT` | Specialized extraction from H.1 DLT description section |
+
+### Known Blockchain Networks (25 entries)
+
+The `KNOWN_BLOCKCHAINS` array includes: Chiliz Chain, Ethereum, Polygon, Binance Smart Chain, BSC, Solana, Avalanche, Arbitrum, Optimism, Base, Fantom, Cronos, Cardano, Tezos, Algorand, Hedera, NEAR, Aptos, Sui, TON, Tron, Flow, Cosmos, Polkadot, Kusama.
+
+### Known Consensus Mechanisms (17 patterns)
+
+The `KNOWN_CONSENSUS_MECHANISMS` array matches patterns for: Proof of Staked Authority (PoSA), Proof of Authority (PoA), Proof of Stake (PoS), Proof of Work (PoW), Delegated Proof of Stake (DPoS), Proof of History, Byzantine Fault Tolerance (BFT), Practical Byzantine Fault Tolerance (PBFT), and Tendermint BFT. Each mechanism has multiple pattern variants (full name, abbreviation, with/without parenthetical).
+
+---
+
+## Confidence Scoring
+
+### Score Assignment
+
+| Level | Numeric Value | Criteria |
+|-------|---------------|----------|
+| High | 0.9 | Section number + field name match (Pass 1) |
+| Medium | 0.7 | Pattern-based extraction with reasonable match |
+| Low | 0.5 | Generic fallback or uncertain extraction |
+
+### Pattern Match Adjustment
+
+When a field is extracted via Pass 2 (pattern-based), the confidence is multiplied by 0.7:
+- High (0.9) becomes 0.63 -- remains reported as the original confidence level
+- Medium (0.7) becomes 0.49 -- reported as `low` if below 0.6 threshold
+- Low (0.5) becomes 0.35 -- reported as `low`
+
+### Overall Confidence Calculation
 
 ```typescript
-interface TableRow {
-  number: string;
-  field: string;
-  content: string;
-}
-
-function extractTableRows(sectionText: string): TableRow[] {
-  const rows: TableRow[] = [];
-
-  // Match numbered rows like "A.1" or "1." followed by field name and content
-  const rowPattern = /^([A-Z]?\d+(?:\.\d+)?)\s+(.+?)\s{2,}(.+)$/gm;
-
-  let match;
-  while ((match = rowPattern.exec(sectionText)) !== null) {
-    rows.push({
-      number: match[1],
-      field: match[2].trim(),
-      content: match[3].trim(),
-    });
-  }
-
-  return rows;
+{
+  overall: number;      // Weighted average of all field scores (0-100)
+  bySection: Record<string, number>;  // Average per section (partA, partD, etc.)
+  lowConfidenceFields: string[];      // Paths of fields with 'low' confidence
 }
 ```
 
 ---
 
-## Step 3: Field Mapping
+## Post-Processing
 
-### Field Mapping Configuration
+After field mapping, `mapPdfToWhitepaper()` applies additional logic:
 
-```typescript
-interface FieldMapping {
-  sourcePattern: RegExp | string[];
-  targetPath: string;
-  transform?: (value: string) => unknown;
-  confidence: 'high' | 'medium' | 'low';
-}
-
-const FIELD_MAPPINGS: FieldMapping[] = [
-  // Part A: Offeror
-  {
-    sourcePattern: /legal\s*name|company\s*name|entity\s*name/i,
-    targetPath: 'partA.legalName',
-    confidence: 'high',
-  },
-  {
-    sourcePattern: /lei|legal\s*entity\s*identifier/i,
-    targetPath: 'partA.lei',
-    transform: (v) => v.replace(/\s/g, '').toUpperCase(),
-    confidence: 'high',
-  },
-  {
-    sourcePattern: /registered\s*address|business\s*address/i,
-    targetPath: 'partA.registeredAddress',
-    confidence: 'medium',
-  },
-  {
-    sourcePattern: /country\s*of\s*registration|home\s*member\s*state/i,
-    targetPath: 'partA.country',
-    confidence: 'medium',
-  },
-  {
-    sourcePattern: /website|url/i,
-    targetPath: 'partA.website',
-    transform: extractUrl,
-    confidence: 'high',
-  },
-
-  // Part D: Project
-  {
-    sourcePattern: /crypto[\s-]*asset\s*name|token\s*name/i,
-    targetPath: 'partD.cryptoAssetName',
-    confidence: 'high',
-  },
-  {
-    sourcePattern: /ticker|symbol/i,
-    targetPath: 'partD.cryptoAssetSymbol',
-    transform: (v) => v.replace(/[$]/g, '').toUpperCase(),
-    confidence: 'high',
-  },
-  {
-    sourcePattern: /total\s*supply|maximum\s*supply/i,
-    targetPath: 'partD.totalSupply',
-    transform: parseNumber,
-    confidence: 'high',
-  },
-  {
-    sourcePattern: /token\s*standard|protocol/i,
-    targetPath: 'partD.tokenStandard',
-    confidence: 'medium',
-  },
-  {
-    sourcePattern: /blockchain|network|chain/i,
-    targetPath: 'partD.blockchainNetwork',
-    confidence: 'medium',
-  },
-  {
-    sourcePattern: /consensus\s*mechanism/i,
-    targetPath: 'partD.consensusMechanism',
-    confidence: 'high',
-  },
-
-  // Part E: Offering
-  {
-    sourcePattern: /subscription\s*period|offering\s*period/i,
-    targetPath: 'partE.subscriptionPeriod',
-    transform: extractDateRange,
-    confidence: 'medium',
-  },
-  {
-    sourcePattern: /token\s*price|price\s*per\s*token/i,
-    targetPath: 'partE.tokenPrice',
-    transform: parseMonetary,
-    confidence: 'high',
-  },
-  {
-    sourcePattern: /maximum\s*goal|subscription\s*goal/i,
-    targetPath: 'partE.maxSubscriptionGoal',
-    transform: parseMonetary,
-    confidence: 'medium',
-  },
-
-  // Part J: Sustainability
-  {
-    sourcePattern: /energy\s*consumption/i,
-    targetPath: 'partJ.energyConsumption',
-    transform: parseEnergy,
-    confidence: 'high',
-  },
-];
-```
-
-### Mapping Engine
-
-```typescript
-interface MappedField {
-  path: string;
-  value: unknown;
-  source: string;
-  confidence: 'high' | 'medium' | 'low';
-}
-
-function mapFields(
-  sections: Map<string, string>,
-  mappings: FieldMapping[]
-): MappedField[] {
-  const results: MappedField[] = [];
-
-  for (const [sectionName, sectionText] of sections) {
-    const rows = extractTableRows(sectionText);
-
-    for (const row of rows) {
-      for (const mapping of mappings) {
-        if (matchesPattern(row.field, mapping.sourcePattern)) {
-          const value = mapping.transform
-            ? mapping.transform(row.content)
-            : row.content;
-
-          results.push({
-            path: mapping.targetPath,
-            value,
-            source: `${sectionName}: ${row.field}`,
-            confidence: mapping.confidence,
-          });
-        }
-      }
-    }
-  }
-
-  return results;
-}
-
-function matchesPattern(
-  text: string,
-  pattern: RegExp | string[]
-): boolean {
-  if (pattern instanceof RegExp) {
-    return pattern.test(text);
-  }
-  return pattern.some(p =>
-    text.toLowerCase().includes(p.toLowerCase())
-  );
-}
-```
-
----
-
-## Step 4: Value Transformers
-
-### Number Parsing
-
-```typescript
-function parseNumber(value: string): number | null {
-  // Remove thousand separators and normalize decimals
-  const cleaned = value
-    .replace(/,/g, '')      // Remove commas
-    .replace(/\s/g, '')     // Remove spaces
-    .replace(/[^\d.-]/g, ''); // Keep only digits, dots, minus
-
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? null : num;
-}
-```
-
-### Monetary Value Parsing
-
-```typescript
-interface MonetaryValue {
-  amount: number;
-  currency: string;
-}
-
-function parseMonetary(value: string): MonetaryValue | null {
-  // Match patterns like "CHF 25,000" or "€50,000" or "50,000 USD"
-  const patterns = [
-    /([A-Z]{3})\s*([\d,]+(?:\.\d{2})?)/i,   // CHF 25,000
-    /€\s*([\d,]+(?:\.\d{2})?)/,              // €50,000
-    /\$\s*([\d,]+(?:\.\d{2})?)/,             // $50,000
-    /([\d,]+(?:\.\d{2})?)\s*([A-Z]{3})/i,    // 50,000 USD
-  ];
-
-  for (const pattern of patterns) {
-    const match = value.match(pattern);
-    if (match) {
-      const amount = parseNumber(match[1] || match[2]);
-      const currency = (match[2] || match[1] || 'EUR').toUpperCase();
-
-      if (amount !== null) {
-        return { amount, currency };
-      }
-    }
-  }
-
-  return null;
-}
-```
-
-### Date Parsing
-
-```typescript
-function parseDate(value: string): string | null {
-  // Common date formats
-  const patterns = [
-    // December 17, 2025
-    /(\w+)\s+(\d{1,2}),?\s+(\d{4})/,
-    // 17 December 2025
-    /(\d{1,2})\s+(\w+)\s+(\d{4})/,
-    // 2025-12-17
-    /(\d{4})-(\d{2})-(\d{2})/,
-    // 17/12/2025 or 17.12.2025
-    /(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})/,
-  ];
-
-  for (const pattern of patterns) {
-    const match = value.match(pattern);
-    if (match) {
-      // Convert to ISO format
-      const date = new Date(match[0]);
-      if (!isNaN(date.getTime())) {
-        return date.toISOString().split('T')[0];
-      }
-    }
-  }
-
-  return null;
-}
-
-function extractDateRange(value: string): {
-  start: string;
-  end: string;
-} | null {
-  // Match patterns like "December 17-19, 2025" or "17/12/2025 - 19/12/2025"
-  const dates = value.match(/\d{4}-\d{2}-\d{2}|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{4}|\w+\s+\d{1,2},?\s+\d{4}/g);
-
-  if (dates && dates.length >= 2) {
-    return {
-      start: parseDate(dates[0]) || '',
-      end: parseDate(dates[1]) || '',
-    };
-  }
-
-  return null;
-}
-```
-
-### Energy Parsing
-
-```typescript
-function parseEnergy(value: string): number | null {
-  // Match patterns like "86.68 kWh" or "86,680 Wh"
-  const match = value.match(/([\d,.]+)\s*(kWh|Wh|MWh)/i);
-
-  if (match) {
-    let amount = parseNumber(match[1]);
-    const unit = match[2].toLowerCase();
-
-    if (amount !== null) {
-      // Convert to kWh
-      if (unit === 'wh') amount /= 1000;
-      if (unit === 'mwh') amount *= 1000;
-
-      return amount;
-    }
-  }
-
-  return null;
-}
-```
-
-### URL Extraction
-
-```typescript
-function extractUrl(value: string): string | null {
-  const urlPattern = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/i;
-  const match = value.match(urlPattern);
-  return match ? match[0] : null;
-}
-```
-
----
-
-## Step 5: Confidence Scoring
-
-### Scoring Logic
-
-```typescript
-interface ExtractionResult {
-  data: WhitepaperData;
-  mappings: MappedField[];
-  confidence: {
-    overall: number;      // 0-100
-    bySection: Record<string, number>;
-    lowConfidenceFields: string[];
-  };
-}
-
-function calculateConfidence(mappings: MappedField[]): {
-  overall: number;
-  bySection: Record<string, number>;
-  lowConfidenceFields: string[];
-} {
-  const weights = { high: 1.0, medium: 0.7, low: 0.4 };
-
-  let totalWeight = 0;
-  let weightedSum = 0;
-  const lowConfidenceFields: string[] = [];
-  const sectionScores: Record<string, { sum: number; count: number }> = {};
-
-  for (const mapping of mappings) {
-    const weight = weights[mapping.confidence];
-    totalWeight += 1;
-    weightedSum += weight;
-
-    if (mapping.confidence === 'low') {
-      lowConfidenceFields.push(mapping.path);
-    }
-
-    // Track by section
-    const section = mapping.path.split('.')[0];
-    if (!sectionScores[section]) {
-      sectionScores[section] = { sum: 0, count: 0 };
-    }
-    sectionScores[section].sum += weight;
-    sectionScores[section].count += 1;
-  }
-
-  const bySection: Record<string, number> = {};
-  for (const [section, scores] of Object.entries(sectionScores)) {
-    bySection[section] = Math.round((scores.sum / scores.count) * 100);
-  }
-
-  return {
-    overall: Math.round((weightedSum / totalWeight) * 100),
-    bySection,
-    lowConfidenceFields,
-  };
-}
-```
-
----
-
-## Step 6: Management Body Extraction
-
-### Pattern Recognition
-
-```typescript
-interface ManagementBodyEntry {
-  identity: string;
-  businessAddress: string;
-  function: string;
-}
-
-function extractManagementBody(
-  sectionText: string
-): ManagementBodyEntry[] {
-  const entries: ManagementBodyEntry[] = [];
-
-  // Pattern for table rows with name, address, function
-  const pattern = /^(\d+)\s+([^\t\n]+)\s+([^\t\n]+)\s+([^\t\n]+)$/gm;
-
-  let match;
-  while ((match = pattern.exec(sectionText)) !== null) {
-    entries.push({
-      identity: match[2].trim(),
-      businessAddress: match[3].trim(),
-      function: match[4].trim(),
-    });
-  }
-
-  // Alternative: Look for structured blocks
-  if (entries.length === 0) {
-    const blockPattern = /Identity:\s*([^\n]+)\n.*?Address:\s*([^\n]+)\n.*?Function:\s*([^\n]+)/gi;
-
-    while ((match = blockPattern.exec(sectionText)) !== null) {
-      entries.push({
-        identity: match[1].trim(),
-        businessAddress: match[2].trim(),
-        function: match[3].trim(),
-      });
-    }
-  }
-
-  return entries;
-}
-```
-
----
-
-## Handling Edge Cases
-
-### Multi-Language Documents
-
-```typescript
-// Detect document language
-function detectLanguage(text: string): string {
-  // Simple heuristic based on common words
-  const languageIndicators: Record<string, RegExp[]> = {
-    en: [/\bthe\b/i, /\band\b/i, /\bof\b/i],
-    de: [/\bund\b/i, /\bder\b/i, /\bdie\b/i],
-    fr: [/\ble\b/i, /\bla\b/i, /\bet\b/i],
-    // Add more languages
-  };
-
-  const scores: Record<string, number> = {};
-
-  for (const [lang, patterns] of Object.entries(languageIndicators)) {
-    scores[lang] = patterns.filter(p => p.test(text)).length;
-  }
-
-  return Object.entries(scores)
-    .sort((a, b) => b[1] - a[1])[0][0];
-}
-```
-
-### Corrupted or Scanned PDFs
-
-```typescript
-async function extractWithFallback(buffer: Buffer): Promise<PdfContent> {
-  // Try standard extraction first
-  try {
-    const result = await extractPdfText(buffer);
-    if (result.text.length > 100) {
-      return result;
-    }
-  } catch (error) {
-    console.warn('Standard extraction failed:', error);
-  }
-
-  // Fallback: The PDF might be image-based
-  // In production, you might use OCR here
-  throw new Error(
-    'PDF appears to be image-based or corrupted. ' +
-    'Please upload a text-based PDF.'
-  );
-}
-```
-
-### Large Documents
-
-```typescript
-// Stream processing for large PDFs
-async function extractLargePdf(
-  buffer: Buffer,
-  onProgress: (percent: number) => void
-): Promise<PdfContent> {
-  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-  const totalPages = pdf.numPages;
-  const pages: string[] = [];
-
-  for (let i = 1; i <= totalPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    pages.push(
-      content.items.map((item: any) => item.str).join(' ')
-    );
-
-    onProgress(Math.round((i / totalPages) * 100));
-  }
-
-  return {
-    text: pages.join('\n\n'),
-    pages: totalPages,
-    metadata: {},
-  };
-}
-```
+1. **Public offering detection**: If `partE.isPublicOffering` was not extracted, scans the full text for "public offer" or "OTPC" keywords.
+2. **Consensus mechanism reuse**: Copies `partD.consensusMechanism` to `partJ.consensusMechanismType` if the latter was not independently extracted.
+3. **Default values**: Sets `language` to `"en"` and `documentDate` to the current date.
+4. **Raw fields population**: Calls `extractAllRawFields()` to populate `rawFields` with all numbered field content for use by the iXBRL generator as fallback content.
 
 ---
 
@@ -636,11 +264,11 @@ async function extractLargePdf(
 
 ### Test Fixtures
 
-Store sample PDFs in `tests/fixtures/pdfs/`:
+Store sample documents in `tests/fixtures/pdfs/`:
 
 ```
 tests/fixtures/pdfs/
-├── persija-whitepaper.pdf       # Full example
+├── persija-whitepaper.pdf       # Full example (PDF)
 ├── minimal-othr.pdf             # Minimal valid OTHR
 ├── minimal-art.pdf              # Minimal valid ART
 ├── minimal-emt.pdf              # Minimal valid EMT
@@ -669,7 +297,7 @@ describe('PDF Extraction', () => {
     const result = await extractWhitepaper(buffer);
 
     expect(result.data.partA.legalName).toBeDefined();
-    expect(result.data.partB).toBeUndefined(); // Optional
+    expect(result.data.partB).toBeUndefined();
     expect(result.confidence.lowConfidenceFields.length).toBeGreaterThan(0);
   });
 
@@ -687,58 +315,13 @@ describe('PDF Extraction', () => {
 
 ---
 
-## Performance Optimization
+## Key File References
 
-### Caching Parsed Content
-
-```typescript
-const extractionCache = new Map<string, ExtractionResult>();
-
-async function extractWithCache(
-  buffer: Buffer,
-  sessionId: string
-): Promise<ExtractionResult> {
-  const cached = extractionCache.get(sessionId);
-  if (cached) {
-    return cached;
-  }
-
-  const result = await extractWhitepaper(buffer);
-  extractionCache.set(sessionId, result);
-
-  // Auto-cleanup after 1 hour
-  setTimeout(() => {
-    extractionCache.delete(sessionId);
-  }, 3600000);
-
-  return result;
-}
-```
-
-### Parallel Processing
-
-```typescript
-async function extractParallel(buffer: Buffer): Promise<ExtractionResult> {
-  // Parse PDF and detect sections in parallel
-  const [text, metadata] = await Promise.all([
-    extractPdfText(buffer),
-    extractPdfMetadata(buffer),
-  ]);
-
-  const sections = detectSections(text.text);
-
-  // Map fields from each section in parallel
-  const sectionPromises = Array.from(sections.entries()).map(
-    async ([name, content]) => {
-      return {
-        name,
-        fields: await mapSectionFields(content),
-      };
-    }
-  );
-
-  const sectionResults = await Promise.all(sectionPromises);
-
-  return assembleResult(sectionResults, metadata);
-}
-```
+| Purpose | File |
+|---------|------|
+| Unified document extraction | `src/lib/document/extractor.ts` |
+| PDF-specific extraction (pdf-parse) | `src/lib/pdf/extractor.ts` |
+| Field mapping engine (three-pass) | `src/lib/pdf/field-mapper.ts` |
+| OTHR field definitions | `src/lib/xbrl/generator/mica-template/field-definitions.ts` |
+| Whitepaper data types | `src/types/whitepaper.ts` |
+| Taxonomy types | `src/types/taxonomy.ts` |

@@ -2,9 +2,9 @@
 
 ## Project Overview
 
-A Next.js web application that transforms PDF whitepapers into MiCA-compliant iXBRL files for regulatory submission to ESMA/NCAs.
+A Next.js web application that transforms whitepaper documents (PDF, DOCX, ODT, RTF) into MiCA-compliant iXBRL files for regulatory submission to ESMA/NCAs.
 
-**Tech Stack:** Next.js 14+ (App Router), TypeScript, Tailwind CSS, shadcn/ui, Vercel
+**Tech Stack:** Next.js 16 (App Router), TypeScript, Tailwind CSS, shadcn/ui, Vercel
 
 ---
 
@@ -19,13 +19,20 @@ A Next.js web application that transforms PDF whitepapers into MiCA-compliant iX
 - LEI format MUST be validated (20 alphanumeric characters with checksum)
 - NEVER include executable code (JavaScript, Java, Flash) in generated iXBRL
 - Only allow PNG, GIF, SVG, JPEG images in output
+- ALWAYS use `decimals` attribute, NEVER `precision`
+- Percentages stored as decimals (0.81 for 81%) with `scale="-2"` on `ix:nonFraction`
+- Enumeration facts MUST go in `ix:hidden`, linked via CSS `-ix-hidden:{fact_id}`
+- `xml:lang` MUST be set on root HTML element and on `ix:references`
+- No `display:none` CSS on tagged facts; CSS SHOULD be embedded (not external)
+- Use `ix:continuation` for multi-fragment block tagging
+- Taxonomy is closed/fixed — no extensions allowed
 
 ### Security
-- NEVER store uploaded PDFs longer than necessary (max 1 hour)
+- NEVER store uploaded documents longer than necessary (max 1 hour)
 - NEVER log or store LEI values in plain text in logs
-- ALWAYS sanitize PDF content before processing (prevent injection)
-- NEVER trust PDF metadata without validation
-- ALWAYS validate file types server-side, not just by extension
+- ALWAYS sanitize document content before processing (prevent injection)
+- NEVER trust document metadata without validation
+- ALWAYS validate file types server-side, not just by extension (magic bytes)
 
 ### Code Quality
 - Use TypeScript strict mode throughout
@@ -41,7 +48,7 @@ A Next.js web application that transforms PDF whitepapers into MiCA-compliant iX
 /src
   /app                    # Next.js App Router pages
     /api                  # API routes
-      /upload             # PDF upload endpoint
+      /upload             # Document upload endpoint (PDF, DOCX, ODT, RTF)
       /validate           # Validation endpoint
       /generate           # iXBRL generation endpoint
     /(routes)             # Page routes
@@ -56,19 +63,46 @@ A Next.js web application that transforms PDF whitepapers into MiCA-compliant iX
   /lib                    # Core libraries
     /xbrl                 # XBRL/iXBRL generation engine
       /taxonomy           # ESMA taxonomy definitions
+        /data             # Bundled taxonomy JSON (taxonomy-bundle.json)
       /generator          # iXBRL document generator
+        /mica-template    # MiCA field definitions & enumeration mappings
+          field-definitions.ts
+          enumeration-mappings.ts
+        /template         # Template rendering (CSS, tagger, layout, etc.)
+          css-styles.ts
+          inline-tagger.ts
+          hidden-facts.ts
+          page-layout.ts
+          section-renderer.ts
+          image-handler.ts
+        document-generator.ts
+        context-builder.ts
+        fact-builder.ts
+        summary-generator.ts
       /validator          # Validation assertion engine
-    /pdf                  # PDF parsing utilities
+        orchestrator.ts
+        existence-engine.ts
+        value-engine.ts
+        lei-validator.ts
+    /document             # Multi-format document extraction
+      extractor.ts        # Unified DOCX/ODT/RTF/PDF extractor
+    /pdf                  # PDF-specific parsing utilities
+      extractor.ts        # Low-level PDF text extraction
+      field-mapper.ts     # Maps extracted content to WhitepaperData
+    /security             # Security utilities
+      rate-limiter.ts
+      sanitize.ts
     /utils                # General utilities
+    env.ts                # Environment configuration
   /types                  # TypeScript type definitions
-    /xbrl.ts              # XBRL-specific types
-    /taxonomy.ts          # Taxonomy element types
-    /whitepaper.ts        # Whitepaper data types
-  /config                 # Configuration files
+    xbrl.ts               # XBRL-specific types
+    taxonomy.ts           # Taxonomy element types
+    whitepaper.ts         # Whitepaper data types
 /tests                    # Test files (mirrors /src structure)
 /docs                     # Additional documentation
   /agent_docs             # Context documents for Claude
-/taxonomy                 # ESMA taxonomy files (bundled)
+/taxonomy                 # Empty — raw ESMA files are in ESME Research documents/
+                          # Bundled data is at src/lib/xbrl/taxonomy/data/
 ```
 
 ---
@@ -81,7 +115,7 @@ For complex features, check these context documents:
 |---------|----------|
 | XBRL Taxonomy | `docs/agent_docs/xbrl-taxonomy.md` |
 | Validation Rules | `docs/agent_docs/validation-rules.md` |
-| PDF Extraction | `docs/agent_docs/pdf-extraction.md` |
+| Document Extraction | `docs/agent_docs/pdf-extraction.md` |
 | Security Model | `docs/agent_docs/security-model.md` |
 | API Contracts | `docs/agent_docs/api-contracts.md` |
 
@@ -92,11 +126,27 @@ For complex features, check these context documents:
 | Purpose | File(s) |
 |---------|---------|
 | XBRL Types | `src/types/xbrl.ts` |
-| Taxonomy Elements | `src/lib/xbrl/taxonomy/elements.ts` |
-| iXBRL Generator | `src/lib/xbrl/generator/ixbrl-generator.ts` |
-| Validation Engine | `src/lib/xbrl/validator/assertion-engine.ts` |
-| PDF Parser | `src/lib/pdf/parser.ts` |
+| Taxonomy Types | `src/types/taxonomy.ts` |
+| Whitepaper Types | `src/types/whitepaper.ts` |
+| Taxonomy Registry | `src/lib/xbrl/taxonomy/registry.ts` |
+| Taxonomy Bundle | `src/lib/xbrl/taxonomy/data/taxonomy-bundle.json` |
+| iXBRL Document Generator | `src/lib/xbrl/generator/document-generator.ts` |
+| Context Builder | `src/lib/xbrl/generator/context-builder.ts` |
+| Fact Builder | `src/lib/xbrl/generator/fact-builder.ts` |
+| Summary Generator | `src/lib/xbrl/generator/summary-generator.ts` |
+| MiCA Field Definitions | `src/lib/xbrl/generator/mica-template/field-definitions.ts` |
+| Enumeration Mappings | `src/lib/xbrl/generator/mica-template/enumeration-mappings.ts` |
+| Validation Orchestrator | `src/lib/xbrl/validator/orchestrator.ts` |
+| Existence Engine | `src/lib/xbrl/validator/existence-engine.ts` |
+| Value Engine | `src/lib/xbrl/validator/value-engine.ts` |
+| LEI Validator | `src/lib/xbrl/validator/lei-validator.ts` |
+| Document Extractor | `src/lib/document/extractor.ts` |
+| PDF Extractor | `src/lib/pdf/extractor.ts` |
+| Field Mapper | `src/lib/pdf/field-mapper.ts` |
 | Upload API | `src/app/api/upload/route.ts` |
+| Validate API | `src/app/api/validate/route.ts` |
+| Generate API | `src/app/api/generate/route.ts` |
+| Environment Config | `src/lib/env.ts` |
 
 ---
 
@@ -110,7 +160,7 @@ npm test
 npm run test:watch
 
 # Run specific test file
-npm test -- src/lib/xbrl/validator/__tests__/assertions.test.ts
+npm test -- tests/lib/xbrl/validator/lei-validator.test.ts
 
 # Run tests with coverage
 npm run test:coverage
@@ -125,22 +175,23 @@ npm run test:e2e
 
 ### Adding a New Taxonomy Element
 1. Add type definition in `src/types/taxonomy.ts`
-2. Add element config in `src/lib/xbrl/taxonomy/elements.ts`
-3. Add validation rules in `src/lib/xbrl/validator/rules/`
-4. Add tests in `tests/lib/xbrl/taxonomy/`
-5. Update field mapping in `src/lib/pdf/field-mapper.ts`
+2. Add element config in `src/lib/xbrl/taxonomy/registry.ts`
+3. Add field definition in `src/lib/xbrl/generator/mica-template/field-definitions.ts`
+4. Add validation rules in `src/lib/xbrl/validator/existence-engine.ts` and/or `value-engine.ts`
+5. Add tests in `tests/lib/xbrl/taxonomy/`
+6. Update field mapping in `src/lib/pdf/field-mapper.ts`
 
 ### Adding a New Validation Assertion
-1. Define assertion in `src/lib/xbrl/validator/assertions/`
-2. Register in assertion registry `src/lib/xbrl/validator/registry.ts`
-3. Add test cases covering pass/fail scenarios
-4. Document in `docs/agent_docs/validation-rules.md`
+1. Add assertion logic in `src/lib/xbrl/validator/existence-engine.ts` or `value-engine.ts`
+2. Add test cases covering pass/fail scenarios
+3. Document in `docs/agent_docs/validation-rules.md`
 
-### Modifying PDF Extraction
-1. Update parser in `src/lib/pdf/parser.ts`
-2. Update field mapper in `src/lib/pdf/field-mapper.ts`
-3. Add test PDFs to `tests/fixtures/pdfs/`
-4. Run extraction tests: `npm test -- pdf`
+### Modifying Document Extraction
+1. For PDF-specific changes: update `src/lib/pdf/extractor.ts`
+2. For multi-format changes: update `src/lib/document/extractor.ts`
+3. Update field mapper in `src/lib/pdf/field-mapper.ts`
+4. Add test fixtures to `tests/fixtures/pdfs/`
+5. Run extraction tests: `npm test -- pdf`
 
 ---
 
@@ -150,9 +201,7 @@ npm run test:e2e
 # Required
 NEXT_PUBLIC_APP_URL=           # Base URL for the app
 
-# Optional (Phase 2+)
-SUPABASE_URL=                  # Supabase project URL
-SUPABASE_ANON_KEY=             # Supabase anonymous key
+# Optional
 LEI_API_KEY=                   # GLEIF API key for LEI validation
 ```
 
@@ -165,11 +214,11 @@ LEI_API_KEY=                   # GLEIF API key for LEI validation
 
 [optional body]
 
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 ```
 
 Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
-Scopes: `xbrl`, `pdf`, `validation`, `ui`, `api`, `config`
+Scopes: `xbrl`, `pdf`, `document`, `validation`, `ui`, `api`, `config`
 
 ---
 

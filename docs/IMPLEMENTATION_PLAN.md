@@ -1,5 +1,29 @@
 # WhitePaper XBRL - Phased Implementation Plan
 
+## Current Status
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 0: Project Setup | **COMPLETE** | Next.js 16, TypeScript strict, Vitest, Playwright |
+| Phase 1: Core Types & Taxonomy | **COMPLETE** | Types defined, taxonomy bundled as JSON |
+| Phase 2: Document Processing | **COMPLETE** | Multi-format: PDF, DOCX, ODT, RTF via `pdf-parse` + `officeparser` |
+| Phase 3: User Interface | **PARTIAL** | UploadZone done, transform page exists, preview page empty |
+| Phase 4: iXBRL Generation | **COMPLETE** | document-generator, context-builder, fact-builder, template system |
+| Phase 5: Validation Engine | **COMPLETE** | orchestrator, existence-engine, value-engine, lei-validator |
+| Phase 6: Integration & Polish | **IN PROGRESS** | End-to-end flow needs completion |
+| Phase 7: Testing & Security | **IN PROGRESS** | 8 unit test files + 1 E2E test; fixture dirs empty |
+| Phase 8: Deployment | **NOT STARTED** | Vercel config pending |
+
+### Key Implementation Deviations from Plan
+
+- **Multi-format support** added (DOCX, ODT, RTF via `officeparser`) — not in original plan
+- **Taxonomy** is bundled as JSON (`src/lib/xbrl/taxonomy/data/taxonomy-bundle.json`), not loaded from XSD at runtime
+- **Validation assertions** are coded directly in engine files, not parsed from formula linkbase XML
+- **No `pdfjs-dist`** dependency — only `pdf-parse` is used for PDF extraction
+- **No Supabase/Redis** integration — sessions are in-memory only (Phase 1 scope)
+
+---
+
 ## Overview
 
 This document outlines the phased implementation approach for building the WhitePaper XBRL platform using Claude Code best practices.
@@ -52,8 +76,8 @@ npm install zod lucide-react class-variance-authority clsx tailwind-merge
 # Install shadcn/ui
 npx shadcn-ui@latest init
 
-# Install PDF processing
-npm install pdf-parse pdfjs-dist
+# Install document processing
+npm install pdf-parse officeparser
 
 # Install testing
 npm install -D vitest @testing-library/react @testing-library/jest-dom playwright
