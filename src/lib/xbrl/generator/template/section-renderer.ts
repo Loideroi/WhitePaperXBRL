@@ -7,7 +7,15 @@
 
 import type { MiCAFieldDefinition } from '../mica-template/field-definitions';
 import { SECTION_TITLES } from '../mica-template/field-definitions';
-import { wrapInlineTag, wrapHiddenLink, escapeHtml } from './inline-tagger';
+import {
+  wrapInlineTag,
+  wrapHiddenLink,
+  wrapContinuationTag,
+  wrapExclude,
+  escapeHtml,
+  splitTextIntoFragments,
+  TEXT_BLOCK_CONTINUATION_THRESHOLD,
+} from './inline-tagger';
 import type { HiddenFactEntry } from './hidden-facts';
 
 /**
@@ -68,10 +76,18 @@ export function renderSection(
   const title = SECTION_TITLES[sectionKey] || `Section ${sectionKey}`;
   const tableClass = sectionKey === 'S' ? 'sustainability' : 'accounts';
 
+  // Collect continuation fragments that need to be placed after the table
+  const continuationFragments: string[] = [];
+
   const rows = fields
     .filter(f => !f.isDimensional) // Dimensional fields rendered separately
-    .map(field => renderFieldRow(field, values, hiddenFacts))
+    .map(field => renderFieldRow(field, values, hiddenFacts, continuationFragments))
     .join('\n');
+
+  // Continuation elements are placed after the table they belong to
+  const continuationHtml = continuationFragments.length > 0
+    ? `\n    <div class="continuations">${continuationFragments.join('\n')}</div>`
+    : '';
 
   return `
     <h2 class="section-heading">${escapeHtml(title)}</h2>
@@ -86,20 +102,35 @@ export function renderSection(
       <tbody>
 ${rows}
       </tbody>
-    </table>`;
+    </table>${continuationHtml}`;
 }
 
 /**
  * Render a single field row in the numbered table.
+ *
+ * For text blocks exceeding TEXT_BLOCK_CONTINUATION_THRESHOLD characters,
+ * the content is split into fragments: the first fragment stays in the table cell,
+ * and subsequent fragments are appended as ix:continuation elements after the table.
+ *
+ * The field number and label cells use ix:exclude when the content cell contains
+ * a tagged fact, since those cells are non-data content within a tagged region context.
+ *
+ * @param field - The MiCA field definition
+ * @param values - Map of xbrlElement to fact values
+ * @param hiddenFacts - Array to push hidden fact entries into
+ * @param continuationFragments - Array to push continuation HTML strings into
  */
 function renderFieldRow(
   field: MiCAFieldDefinition,
   values: Map<string, FactValue>,
-  hiddenFacts: HiddenFactEntry[]
+  hiddenFacts: HiddenFactEntry[],
+  continuationFragments: string[]
 ): string {
   const factValue = values.get(field.xbrlElement);
 
   let contentCell: string;
+  // Track whether this row has a tagged fact (for ix:exclude on number/label cells)
+  let hasTaggedFact = false;
 
   if (!factValue || !factValue.value) {
     // Empty field
@@ -115,8 +146,25 @@ function renderFieldRow(
       humanReadable: factValue.humanReadable || factValue.value,
     });
     contentCell = `<td>${wrapHiddenLink(hiddenId, factValue.humanReadable || factValue.value)}</td>`;
+    hasTaggedFact = true;
+  } else if (field.isTextBlock && factValue.value.length > TEXT_BLOCK_CONTINUATION_THRESHOLD) {
+    // Long text block — split into fragments using ix:continuation
+    hasTaggedFact = true;
+    const factId = generateFactId('fact');
+    const fragments = splitTextIntoFragments(factValue.value);
+    const { primary, continuations } = wrapContinuationTag({
+      id: factId,
+      name: field.xbrlElement,
+      contextRef: factValue.contextRef,
+      fragments,
+      isTextBlock: true,
+    });
+    contentCell = `<td><div class="text-block">${primary}</div></td>`;
+    // Append continuation elements to be rendered after the table
+    continuationFragments.push(...continuations);
   } else {
     // Regular inline fact
+    hasTaggedFact = true;
     const factId = generateFactId('fact');
     const taggedContent = wrapInlineTag({
       id: factId,
@@ -136,9 +184,18 @@ function renderFieldRow(
     }
   }
 
+  // Wrap number and label in ix:exclude when the row contains a tagged fact,
+  // to prevent them from being treated as part of the XBRL data.
+  const numberCell = hasTaggedFact
+    ? `<td>${wrapExclude(escapeHtml(field.number))}</td>`
+    : `<td>${escapeHtml(field.number)}</td>`;
+  const labelCell = hasTaggedFact
+    ? `<td>${wrapExclude(escapeHtml(field.label))}</td>`
+    : `<td>${escapeHtml(field.label)}</td>`;
+
   return `        <tr>
-          <td>${escapeHtml(field.number)}</td>
-          <td>${escapeHtml(field.label)}</td>
+          ${numberCell}
+          ${labelCell}
           ${contentCell}
         </tr>`;
 }
