@@ -126,7 +126,7 @@ const MICA_SECTION_MAPPINGS: MiCASectionMapping[] = [
     fieldNames: ['Country', 'Registered address', 'Head office'],
     patterns: [/country|jurisdiction|member\s*state|switzerland|zug/i],
     targetPath: 'partA.country',
-    transform: extractCountryCode,
+    transform: extractCountryFromAddress,
     confidence: 'medium',
   },
   {
@@ -421,7 +421,66 @@ function extractLEIValue(text: string): string {
 /**
  * Extract country code from text
  */
-function extractCountryCode(text: string): string {
+function extractCountryCode(text: string, _fullText?: string): string {
+  const code = countryNameToCode(text);
+  if (code) return code;
+
+  return text.slice(0, 2).toUpperCase();
+}
+
+/**
+ * Extract country code from an address string.
+ * Parses the country from the end of the address (after the last comma).
+ * E.g., "Gubelstrasse 11, 6300 Zug, Switzerland" → "CH"
+ */
+function extractCountryFromAddress(addressText: string, fullText: string): string {
+  // First try the address-based extraction:
+  // Look for country as the last component (after last comma)
+  const parts = addressText.split(',').map(p => p.trim());
+  if (parts.length >= 2) {
+    const lastPart = parts[parts.length - 1];
+    if (lastPart) {
+      const code = countryNameToCode(lastPart);
+      if (code) return code;
+    }
+  }
+
+  // Fall back to general country code extraction
+  return extractCountryCode(addressText, fullText);
+}
+
+/**
+ * Extract subdivision (city/region) from an address string.
+ * Parses the component between the last two commas, stripping postal codes.
+ * E.g., "Gubelstrasse 11, 6300 Zug, Switzerland" → "Zug"
+ */
+function extractSubdivisionFromAddress(addressText: string): string {
+  const parts = addressText.split(',').map(p => p.trim());
+
+  if (parts.length >= 3) {
+    // The city/region is typically the second-to-last component
+    const cityPart = parts[parts.length - 2];
+    if (cityPart) {
+      // Strip postal code (digits at the start or end)
+      return cityPart.replace(/^\d{4,6}\s*/, '').replace(/\s*\d{4,6}$/, '').trim();
+    }
+  }
+
+  if (parts.length === 2) {
+    // Two parts: "city, country" — city is first
+    const cityPart = parts[0];
+    if (cityPart) {
+      return cityPart.replace(/^\d{4,6}\s*/, '').replace(/\s*\d{4,6}$/, '').trim();
+    }
+  }
+
+  return '';
+}
+
+/**
+ * Convert a country name to ISO 2-letter code (shared lookup)
+ */
+function countryNameToCode(text: string): string | null {
   const countryMap: Record<string, string> = {
     switzerland: 'CH',
     swiss: 'CH',
@@ -461,7 +520,7 @@ function extractCountryCode(text: string): string {
     jakarta: 'ID',
   };
 
-  const lowerText = text.toLowerCase();
+  const lowerText = text.toLowerCase().trim();
 
   for (const [name, code] of Object.entries(countryMap)) {
     if (lowerText.includes(name)) {
@@ -471,11 +530,11 @@ function extractCountryCode(text: string): string {
 
   // Check for 2-letter code
   const codeMatch = text.match(/\b([A-Z]{2})\b/);
-  if (codeMatch?.[1] && codeMatch[1] !== 'AG') {  // Exclude "AG" company suffix
+  if (codeMatch?.[1] && codeMatch[1] !== 'AG') {
     return codeMatch[1];
   }
 
-  return text.slice(0, 2).toUpperCase();
+  return null;
 }
 
 /**
@@ -1392,59 +1451,73 @@ export function mapPdfToWhitepaper(
   }
 
   // Second pass: Use patterns for anything not found
+  // Scope pattern search to the relevant section when possible
   for (const mapping of MICA_SECTION_MAPPINGS) {
     if (mappings.some((m) => m.path === mapping.targetPath)) continue;
 
-    for (const pattern of mapping.patterns) {
-      const match = fullText.match(pattern);
-      if (match && match.index !== undefined) {
-        // Extract content after the match
-        const afterMatch = fullText.slice(match.index + match[0].length);
+    // Determine which section text to search (prefer section-specific over full text)
+    const sectionKey = mapping.targetPath.split('.')[0] || '';
+    const sectionText = extraction.sections.get(sectionKey);
 
-        // Get the next meaningful content
-        let content: string;
-        if (mapping.multiLine) {
-          // Get multiple lines until next section or limit
-          const endMatch = afterMatch.match(/\n[A-Z]\.\d+[\s.:]/);
-          content = afterMatch.slice(0, endMatch?.index || 2000).trim();
-        } else {
-          // Get the rest of the line, stopping at next numbered item or newline
-          const lineEnd = afterMatch.search(/\n\d+\.\s|\n[A-Z]\.\d|$/);
-          const firstLine = afterMatch.slice(0, lineEnd === -1 ? undefined : lineEnd);
-          content = firstLine.trim().slice(0, 500);
-        }
+    // Search section text first, fall back to full text
+    const textsToSearch = sectionText ? [sectionText, fullText] : [fullText];
 
-        // Clean up common prefixes and placeholder text
-        content = content
-          .replace(/^[:\s]+/, '')
-          .replace(/^(is|are|the|a|an)\s+/i, '')
-          .trim();
-        content = stripPlaceholderText(content);
+    let found = false;
+    for (const searchText of textsToSearch) {
+      if (found) break;
 
-        if (content && content.length > 2) {
-          const value = mapping.transform ? mapping.transform(content, fullText) : content;
+      for (const pattern of mapping.patterns) {
+        const match = searchText.match(pattern);
+        if (match && match.index !== undefined) {
+          // Extract content after the match
+          const afterMatch = searchText.slice(match.index + match[0].length);
 
-          if (value !== undefined && value !== null && value !== '') {
-            setNestedValue(data, mapping.targetPath, value);
+          // Get the next meaningful content
+          let content: string;
+          if (mapping.multiLine) {
+            // Get multiple lines until next section or limit
+            const endMatch = afterMatch.match(/\n[A-Z]\.\d+[\s.:]/);
+            content = afterMatch.slice(0, endMatch?.index || 2000).trim();
+          } else {
+            // Get the rest of the line, stopping at next numbered item or newline
+            const lineEnd = afterMatch.search(/\n\d+\.\s|\n[A-Z]\.\d|$/);
+            const firstLine = afterMatch.slice(0, lineEnd === -1 ? undefined : lineEnd);
+            content = firstLine.trim().slice(0, 500);
+          }
 
-            const baseConfidence =
-              mapping.confidence === 'high' ? 0.9 : mapping.confidence === 'medium' ? 0.7 : 0.5;
-            const adjustedConfidence = baseConfidence * 0.7; // Lower for pattern match
+          // Clean up common prefixes and placeholder text
+          content = content
+            .replace(/^[:\s]+/, '')
+            .replace(/^(is|are|the|a|an)\s+/i, '')
+            .trim();
+          content = stripPlaceholderText(content);
 
-            mappings.push({
-              path: mapping.targetPath,
-              value,
-              source: `Pattern: ${pattern.source.slice(0, 30)}`,
-              confidence: adjustedConfidence < 0.6 ? 'low' : mapping.confidence,
-            });
+          if (content && content.length > 2) {
+            const value = mapping.transform ? mapping.transform(content, fullText) : content;
 
-            const section = mapping.targetPath.split('.')[0] || 'unknown';
-            if (!confidenceScores[section]) {
-              confidenceScores[section] = [];
+            if (value !== undefined && value !== null && value !== '') {
+              setNestedValue(data, mapping.targetPath, value);
+
+              const baseConfidence =
+                mapping.confidence === 'high' ? 0.9 : mapping.confidence === 'medium' ? 0.7 : 0.5;
+              const adjustedConfidence = baseConfidence * 0.7; // Lower for pattern match
+
+              mappings.push({
+                path: mapping.targetPath,
+                value,
+                source: `Pattern: ${pattern.source.slice(0, 30)}`,
+                confidence: adjustedConfidence < 0.6 ? 'low' : mapping.confidence,
+              });
+
+              const section = mapping.targetPath.split('.')[0] || 'unknown';
+              if (!confidenceScores[section]) {
+                confidenceScores[section] = [];
+              }
+              confidenceScores[section].push(adjustedConfidence);
+
+              found = true;
+              break;
             }
-            confidenceScores[section].push(adjustedConfidence);
-
-            break;
           }
         }
       }

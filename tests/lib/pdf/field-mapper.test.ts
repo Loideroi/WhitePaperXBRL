@@ -273,6 +273,49 @@ describe('mapPdfToWhitepaper', () => {
         expect(result.data.partA?.country).toBe(code);
       }
     });
+
+    it('should extract country from end of address string', () => {
+      const extraction = createExtractionResult([
+        ['partA', 'A.3    Registered address    Gubelstrasse 11, 6300 Zug, Switzerland'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      expect(result.data.partA?.country).toBe('CH');
+    });
+
+    it('should extract country from multi-comma address', () => {
+      const extraction = createExtractionResult([
+        ['partA', 'A.4    Head office    Level 3, Quantum House, 75 Abate Rigord Street, Ta\' Xbiex, Malta'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      expect(result.data.partA?.country).toBe('MT');
+    });
+  });
+
+  describe('Pattern scoping to sections', () => {
+    it('should not match H.1 pattern text from Part A content', () => {
+      // Part A has "Markets Served" text, Part H has DLT description
+      const extraction: PdfExtractionResult = {
+        text: 'Part A Markets Served The company operates globally\n\nH.1 Distributed ledger technology The Ethereum blockchain',
+        pages: 1,
+        metadata: {},
+        sections: new Map([
+          ['partA', 'Part A Markets Served The company operates globally'],
+          ['partH', 'H.1 Distributed ledger technology The Ethereum blockchain'],
+        ]),
+      };
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      // The blockchain description should come from Part H, not Part A
+      if (result.data.partH?.blockchainDescription) {
+        expect(result.data.partH.blockchainDescription).toContain('Ethereum');
+        expect(result.data.partH.blockchainDescription).not.toContain('Markets Served');
+      }
+    });
   });
 
   describe('Multiple sections', () => {
