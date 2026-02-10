@@ -231,3 +231,32 @@ Before creating a PR:
 - [ ] New features have tests
 - [ ] XBRL output validated against ESMA taxonomy
 - [ ] Security considerations documented if applicable
+
+---
+
+## Context Management
+
+### During Long Sessions
+- **At 60% context**: Run `/compact` to compress conversation history
+- **Before starting a new feature**: Run `/clear` if the previous feature is committed
+- **After each commit**: Consider `/clear` to free context for the next task
+
+### For Multi-Step Implementations
+1. Write a plan to `docs/PROGRESS.md` before coding (track what's pending/done)
+2. Commit after each complete feature (code + tests passing)
+3. Use subagents for investigation/exploration to avoid polluting main context
+4. If a task touches >5 files, break it into sub-tasks and commit each separately
+
+### Checkpoint Pattern (Prevents "Dumb Zone")
+When implementing multiple features in one session:
+1. Implement feature → run tests → commit
+2. Update `docs/PROGRESS.md` with what's done and what's next
+3. `/compact` or `/clear`
+4. Repeat for next feature
+
+### Recovery from Context Limit
+If a session hits context limit mid-implementation:
+1. Uncommitted work survives in the working tree
+2. New session: read `docs/PROGRESS.md` + `git status` + `git diff --stat`
+3. Run `npm test` to assess state
+4. Fix any issues, commit logically grouped changes
