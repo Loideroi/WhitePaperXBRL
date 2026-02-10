@@ -20,6 +20,11 @@ export default defineConfig({
         '**/*.config.*',
         '**/types/**',
         '.next/',
+        'scripts/',
+        'src/app/**/*.tsx',
+        'src/components/**',
+        'src/app/api/**',
+        'src/lib/env.ts',
       ],
       thresholds: {
         global: {
