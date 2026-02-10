@@ -68,6 +68,13 @@ function getFieldSource(mappings: MappedField[], path: string): string | undefin
 }
 
 function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+  // rawFields keys contain dots (e.g., "A.2", "E.14") — treat as single key
+  if (path.startsWith('rawFields.')) {
+    const rawFieldKey = path.slice('rawFields.'.length);
+    const rawFields = obj.rawFields as Record<string, unknown> | undefined;
+    return rawFields?.[rawFieldKey];
+  }
+
   const parts = path.split('.');
   let current: unknown = obj;
 

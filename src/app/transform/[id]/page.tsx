@@ -474,9 +474,18 @@ export default function TransformPage() {
   // Handle field changes
   const handleFieldChange = useCallback((path: string, value: unknown) => {
     setData((prev) => {
-      const parts = path.split('.');
       const newData = { ...prev };
 
+      // rawFields keys contain dots (e.g., "A.2", "E.14") — treat as single key
+      if (path.startsWith('rawFields.')) {
+        const rawFieldKey = path.slice('rawFields.'.length);
+        const rawFields = { ...(newData.rawFields || {}) };
+        rawFields[rawFieldKey] = value as string;
+        newData.rawFields = rawFields;
+        return newData as Partial<WhitepaperData>;
+      }
+
+      const parts = path.split('.');
       let current: Record<string, unknown> = newData as Record<string, unknown>;
       for (let i = 0; i < parts.length - 1; i++) {
         const part = parts[i];
