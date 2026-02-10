@@ -13,6 +13,8 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   // Optional GLEIF API URL (public API, no auth needed)
   GLEIF_API_URL: z.string().url().optional(),
+  // Optional GLEIF API key for authenticated access (Bearer token)
+  LEI_API_KEY: z.string().min(1).optional(),
   // Optional Redis URL for production rate limiting
   REDIS_URL: z.string().url().optional(),
 });
@@ -38,6 +40,7 @@ export function getEnv(): Env {
   const result = envSchema.safeParse({
     NODE_ENV: process.env.NODE_ENV,
     GLEIF_API_URL: process.env.GLEIF_API_URL,
+    LEI_API_KEY: process.env.LEI_API_KEY,
     REDIS_URL: process.env.REDIS_URL,
   });
 
@@ -53,6 +56,7 @@ export function getEnv(): Env {
     cachedEnv = {
       NODE_ENV: 'development',
       GLEIF_API_URL: undefined,
+      LEI_API_KEY: undefined,
       REDIS_URL: undefined,
     };
 
