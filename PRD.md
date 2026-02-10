@@ -4,7 +4,7 @@
 **Version:** 1.0
 **Date:** January 27, 2026
 **Author:** Claude Code
-**Status:** In Progress (Phases 0-5 complete, Phase 6-8 in progress)
+**Status:** In Progress (Phases 0-6 complete, Phase 7 in progress, Phase 8 not started)
 
 ---
 
@@ -38,7 +38,7 @@ WhitePaper XBRL is a web-based platform that enables legal representatives and c
 - **Compliance Automation**: Transform human-readable whitepapers into machine-readable iXBRL format as mandated by Commission Implementing Regulation (EU) 2024/2984
 - **Regulatory Alignment**: Full compliance with ESMA's MiCA taxonomy (effective March 31, 2025) and Malta's MFSA requirements
 - **User-Friendly**: Simple upload-and-transform workflow for non-technical legal representatives
-- **Validation**: Built-in validation against ESMA's 480+ assertion rules before submission
+- **Validation**: Built-in validation against ESMA's 488 assertion rules before submission
 
 ### 1.3 Target Users
 
@@ -67,7 +67,7 @@ WhitePaper XBRL is a web-based platform that enables legal representatives and c
    - Purchase expensive commercial software
    - Manually tag documents using complex tools
 
-4. **Validation Burden**: 480 validation assertions must pass before submission to National Competent Authorities (NCAs)
+4. **Validation Burden**: 488 validation assertions must pass before submission to National Competent Authorities (NCAs)
 
 ### 2.2 Opportunity
 
@@ -231,12 +231,14 @@ Create a streamlined, self-service platform where legal representatives can uplo
 | ID | Requirement | Priority |
 |----|-------------|----------|
 | FR-030 | Validate against all 257 existence assertions | Must Have |
-| FR-031 | Validate against all 223 value assertions | Must Have |
+| FR-031 | Validate against all 224 value assertions | Must Have |
 | FR-032 | Validate LEI using 6 LEI taxonomy assertions | Must Have |
 | FR-033 | Display validation errors with field references | Must Have |
 | FR-034 | Display validation warnings (SHOULD fix) | Must Have |
 | FR-035 | Block export if ERROR-level assertions fail | Must Have |
 | FR-036 | Generate validation report (PDF export) | Should Have |
+| FR-037 | Detect duplicate facts (inconsistent duplicates = ERROR/WARNING) | Must Have |
+| FR-038 | GLEIF API LEI lookup with graceful fallback | Should Have |
 
 #### 6.1.5 iXBRL Generation
 
@@ -314,7 +316,7 @@ Create a streamlined, self-service platform where legal representatives can uplo
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Data Layer                                 │
 │  ┌─────────────────┐  ┌──────────────────────────────────────┐ │
-│  │ ESMA Taxonomy   │  │ User Sessions (Optional Supabase)    │ │
+│  │ ESMA Taxonomy   │  │ User Sessions (In-Memory)             │ │
 │  │ (Bundled)       │  │                                      │ │
 │  └─────────────────┘  └──────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
@@ -328,10 +330,10 @@ Create a streamlined, self-service platform where legal representatives can uplo
 | **UI Framework** | Tailwind CSS + shadcn/ui | Rapid development, professional look |
 | **Document Processing** | pdf-parse, officeparser | PDF text extraction + DOCX/ODT/RTF support |
 | **XBRL Engine** | Custom TypeScript implementation | Full control over iXBRL generation |
-| **Validation** | Arelle (Python) via API or custom rules | Industry-standard XBRL validator |
+| **Validation** | Custom TypeScript rules engine | 488 assertions coded in existence-engine, value-engine, lei-validator, duplicate-detector |
 | **Hosting** | Vercel | Specified requirement, excellent DX |
-| **Database** | Supabase (optional) | User sessions, saved drafts |
-| **File Storage** | Vercel Blob or Supabase Storage | Temporary file handling |
+| **Database** | In-memory (Phase 1) | Sessions held in memory; database persistence planned for Phase 2 |
+| **File Storage** | In-memory | All document processing in-memory per ESMA retention requirements |
 
 ### 7.3 XBRL Technical Specifications
 
@@ -423,12 +425,13 @@ The system must handle the following XBRL data types:
                               ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │ 4. VALIDATE                                                       │
-│    System runs 480 validation assertions                          │
+│    System runs 488 validation assertions                          │
 │    ┌─────────────────────────────────────────────────────┐       │
 │    │ ✅ Validation Complete                              │       │
 │    │ ├─ 257 existence assertions: PASSED                │       │
-│    │ ├─ 223 value assertions: PASSED                    │       │
-│    │ └─ 6 LEI assertions: PASSED                        │       │
+│    │ ├─ 224 value assertions: PASSED                    │       │
+│    │ ├─ 6 LEI assertions: PASSED                        │       │
+│    │ └─ 1 duplicate detection: PASSED                   │       │
 │    └─────────────────────────────────────────────────────┘       │
 └──────────────────────────────────────────────────────────────────┘
                               │
@@ -569,7 +572,7 @@ The following fields must present dropdown selections from ESMA-defined domains:
 | Metric | Requirement |
 |--------|-------------|
 | PDF Processing | < 30 seconds for 50-page PDF |
-| Validation | < 10 seconds for all 480 assertions |
+| Validation | < 10 seconds for all 488 assertions |
 | iXBRL Generation | < 5 seconds |
 | Page Load | < 2 seconds (LCP) |
 | File Upload | Progress indicator, resume on failure |
@@ -689,8 +692,10 @@ The following fields must present dropdown selections from ESMA-defined domains:
 
 **Deliverables:**
 - [ ] All 257 existence assertions
-- [ ] All 223 value assertions
+- [ ] All 224 value assertions
 - [ ] LEI validation integration
+- [ ] Duplicate fact detection
+- [ ] GLEIF LEI lookup integration
 - [ ] Validation report generation
 - [ ] Error/warning distinction (ERROR vs WARNING severity)
 
