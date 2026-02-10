@@ -31,211 +31,376 @@ interface SectionConfig {
   fields: Array<{
     path: string;
     label: string;
-    type: 'text' | 'boolean' | 'monetary' | 'textblock' | 'number';
+    type: 'text' | 'boolean' | 'monetary' | 'textblock' | 'number' | 'date' | 'enumeration';
     required?: boolean;
     placeholder?: string;
     helpText?: string;
     maxLength?: number;
+    options?: Record<string, string>;
   }>;
 }
 
-// Section configurations
+// Enumeration option maps for dropdown fields
+const MEMBER_STATE_OPTIONS: Record<string, string> = {
+  AT: 'Austria', BE: 'Belgium', BG: 'Bulgaria', HR: 'Croatia', CY: 'Cyprus',
+  CZ: 'Czechia', DK: 'Denmark', EE: 'Estonia', FI: 'Finland', FR: 'France',
+  DE: 'Germany', GR: 'Greece', HU: 'Hungary', IE: 'Ireland', IT: 'Italy',
+  LV: 'Latvia', LT: 'Lithuania', LU: 'Luxembourg', MT: 'Malta', NL: 'Netherlands',
+  PL: 'Poland', PT: 'Portugal', RO: 'Romania', SK: 'Slovakia', SI: 'Slovenia',
+  ES: 'Spain', SE: 'Sweden',
+};
+
+const PUBLIC_OFFERING_OPTIONS: Record<string, string> = {
+  publicOffering: 'Public offering',
+  admissionToTrading: 'Admission to trading',
+  both: 'Both public offering and admission to trading',
+};
+
+const CURRENCY_OPTIONS: Record<string, string> = {
+  EUR: 'Euro (EUR)', USD: 'US Dollar (USD)', GBP: 'British Pound (GBP)', CHF: 'Swiss Franc (CHF)',
+};
+
+const TARGETED_HOLDERS_OPTIONS: Record<string, string> = {
+  allInvestors: 'All types of investors',
+  retailInvestors: 'Retail investors',
+  qualifiedInvestors: 'Qualified investors',
+};
+
+const PLACEMENT_FORM_OPTIONS: Record<string, string> = {
+  direct: 'Direct placement',
+  throughCASP: 'Through CASP',
+};
+
+const WHITE_PAPER_TYPE_OPTIONS: Record<string, string> = {
+  initial: 'Initial white paper',
+  modified: 'Modified white paper',
+};
+
+const SUBMISSION_TYPE_OPTIONS: Record<string, string> = {
+  notification: 'Notification',
+  application: 'Application for admission to trading',
+};
+
+const PERSON_TYPE_OPTIONS: Record<string, string> = {
+  advisor: 'Advisor',
+  auditor: 'Auditor',
+  otherPerson: 'Other person',
+};
+
+// Section configurations covering all MiCA Parts (A-J) + Sustainability (S)
 const SECTIONS: SectionConfig[] = [
+  // ============================================================
+  // Part A: Information about the Offeror
+  // ============================================================
   {
     id: 'partA',
     title: 'Part A: Offeror Information',
     description: 'Information about the entity offering the crypto-asset',
     fields: [
-      {
-        path: 'partA.legalName',
-        label: 'Legal Name',
-        type: 'text',
-        required: true,
-        placeholder: 'Enter company legal name',
-        helpText: 'Full legal name of the offeror entity',
-      },
-      {
-        path: 'partA.lei',
-        label: 'Legal Entity Identifier (LEI)',
-        type: 'text',
-        required: true,
-        placeholder: '20 character LEI code',
-        helpText: 'ISO 17442 compliant LEI',
-        maxLength: 20,
-      },
-      {
-        path: 'partA.registeredAddress',
-        label: 'Registered Address',
-        type: 'textblock',
-        required: true,
-        placeholder: 'Full registered address',
-      },
-      {
-        path: 'partA.country',
-        label: 'Country',
-        type: 'text',
-        required: true,
-        placeholder: 'ISO 3166-1 alpha-2 code (e.g., MT, DE)',
-        helpText: 'Two-letter country code',
-        maxLength: 2,
-      },
-      {
-        path: 'partA.website',
-        label: 'Website',
-        type: 'text',
-        placeholder: 'https://example.com',
-      },
-      {
-        path: 'partA.contactEmail',
-        label: 'Contact Email',
-        type: 'text',
-        placeholder: 'contact@example.com',
-      },
+      { path: 'partA.legalName', label: 'Legal Name (A.1)', type: 'text', required: true, placeholder: 'Enter company legal name' },
+      { path: 'rawFields.A.2', label: 'Legal Form (A.2)', type: 'text', placeholder: 'e.g., Limited Liability Company' },
+      { path: 'partA.registeredAddress', label: 'Registered Address (A.3)', type: 'textblock', required: true, placeholder: 'Full registered address' },
+      { path: 'partA.country', label: 'Registered Country (A.3c)', type: 'enumeration', required: true, options: MEMBER_STATE_OPTIONS, helpText: 'EU member state' },
+      { path: 'rawFields.A.3s', label: 'Country Subdivision (A.3s)', type: 'text', placeholder: 'Region/province' },
+      { path: 'rawFields.A.4', label: 'Head Office (A.4)', type: 'text', placeholder: 'Head office address' },
+      { path: 'rawFields.A.4c', label: 'Head Office Country (A.4c)', type: 'enumeration', options: MEMBER_STATE_OPTIONS },
+      { path: 'rawFields.A.5', label: 'Registration Date (A.5)', type: 'date' },
+      { path: 'partA.lei', label: 'Legal Entity Identifier (A.6)', type: 'text', required: true, placeholder: '20-char LEI code', helpText: 'ISO 17442 compliant LEI', maxLength: 20 },
+      { path: 'rawFields.A.7', label: 'Other National Identifier (A.7)', type: 'text', placeholder: 'National registration number' },
+      { path: 'partA.contactPhone', label: 'Contact Telephone (A.8)', type: 'text', placeholder: '+31 20 123 4567' },
+      { path: 'partA.contactEmail', label: 'E-mail Address (A.9)', type: 'text', placeholder: 'contact@example.com' },
+      { path: 'rawFields.A.10', label: 'Response Time (days) (A.10)', type: 'number', helpText: 'Offeror complaint response time in days' },
+      { path: 'rawFields.A.11', label: 'Parent Company (A.11)', type: 'text', placeholder: 'Name of parent company' },
+      { path: 'rawFields.A.13', label: 'Business Activity (A.13)', type: 'textblock', placeholder: 'Describe business activities', maxLength: 5000 },
+      { path: 'rawFields.A.14', label: 'Parent Company Business Activity (A.14)', type: 'textblock', placeholder: 'Parent company activities' },
+      { path: 'rawFields.A.15', label: 'Newly Established (A.15)', type: 'boolean', helpText: 'Was the offeror recently established?' },
+      { path: 'rawFields.A.16a', label: 'Financial Condition (3 years) (A.16a)', type: 'textblock', placeholder: 'Financial condition for past three years' },
+      { path: 'rawFields.A.16b', label: 'Governance Arrangements (A.16b)', type: 'textblock', placeholder: 'Describe governance arrangements' },
+      { path: 'rawFields.A.17', label: 'Financial Condition Since Registration (A.17)', type: 'textblock', placeholder: 'Financial condition since registration' },
+      { path: 'partA.website', label: 'Website', type: 'text', placeholder: 'https://example.com' },
     ],
   },
+
+  // ============================================================
+  // Part B: Information about the Issuer (if different)
+  // ============================================================
+  {
+    id: 'partB',
+    title: 'Part B: Issuer Information',
+    description: 'Information about the issuer (if different from offeror)',
+    fields: [
+      { path: 'rawFields.B.1', label: 'Issuer Different from Offeror (B.1)', type: 'boolean', helpText: 'Is the issuer different from the offeror?' },
+      { path: 'partB.legalName', label: 'Issuer Name (B.2)', type: 'text', placeholder: 'Legal name of issuer' },
+      { path: 'rawFields.B.3', label: 'Legal Form (B.3)', type: 'text', placeholder: 'Legal form of issuer' },
+      { path: 'partB.registeredAddress', label: 'Registered Address (B.4)', type: 'text', placeholder: 'Issuer registered address' },
+      { path: 'rawFields.B.4c', label: 'Registered Country (B.4c)', type: 'enumeration', options: MEMBER_STATE_OPTIONS },
+      { path: 'rawFields.B.5', label: 'Head Office (B.5)', type: 'text', placeholder: 'Issuer head office' },
+      { path: 'rawFields.B.5c', label: 'Head Office Country (B.5c)', type: 'enumeration', options: MEMBER_STATE_OPTIONS },
+      { path: 'rawFields.B.6', label: 'Registration Date (B.6)', type: 'date' },
+      { path: 'partB.lei', label: 'Legal Entity Identifier (B.7)', type: 'text', placeholder: '20-char LEI', maxLength: 20 },
+      { path: 'rawFields.B.8', label: 'Other National Identifier (B.8)', type: 'text' },
+      { path: 'rawFields.B.9', label: 'Parent Company (B.9)', type: 'text' },
+      { path: 'rawFields.B.11', label: 'Business Activity (B.11)', type: 'textblock', placeholder: 'Issuer business activities' },
+      { path: 'rawFields.B.12', label: 'Parent Company Business Activity (B.12)', type: 'textblock' },
+      { path: 'rawFields.B.13', label: 'Third-Party Roles (B.13)', type: 'textblock', placeholder: 'Describe third-party roles' },
+    ],
+  },
+
+  // ============================================================
+  // Part C: Operator of Trading Platform
+  // ============================================================
+  {
+    id: 'partC',
+    title: 'Part C: Trading Platform Operator',
+    description: 'Information about the operator of the trading platform (if applicable)',
+    fields: [
+      { path: 'partC.legalName', label: 'Operator Name (C.1)', type: 'text', placeholder: 'Legal name of operator' },
+      { path: 'rawFields.C.2', label: 'Legal Form (C.2)', type: 'text' },
+      { path: 'partC.registeredAddress', label: 'Registered Address (C.3)', type: 'text' },
+      { path: 'rawFields.C.3c', label: 'Registered Country (C.3c)', type: 'enumeration', options: MEMBER_STATE_OPTIONS },
+      { path: 'rawFields.C.4', label: 'Head Office (C.4)', type: 'text' },
+      { path: 'rawFields.C.4c', label: 'Head Office Country (C.4c)', type: 'enumeration', options: MEMBER_STATE_OPTIONS },
+      { path: 'rawFields.C.5', label: 'Registration Date (C.5)', type: 'date' },
+      { path: 'partC.lei', label: 'Legal Entity Identifier (C.6)', type: 'text', placeholder: '20-char LEI', maxLength: 20 },
+      { path: 'rawFields.C.7', label: 'Other National Identifier (C.7)', type: 'text' },
+      { path: 'rawFields.C.8', label: 'Parent Company (C.8)', type: 'text' },
+      { path: 'rawFields.C.10', label: 'Number of Units (C.10)', type: 'number', helpText: 'Total units to be admitted to trading' },
+      { path: 'rawFields.C.11', label: 'Business Activity (C.11)', type: 'textblock' },
+      { path: 'rawFields.C.12a', label: 'Explicit Consequences (C.12a)', type: 'textblock' },
+      { path: 'rawFields.C.12b', label: 'Parent Company Business Activity (C.12b)', type: 'textblock' },
+      { path: 'rawFields.C.13a', label: 'Offer Phases (C.13a)', type: 'textblock' },
+      { path: 'rawFields.C.13b', label: 'Other Persons Drawing Up White Paper (C.13b)', type: 'textblock' },
+      { path: 'rawFields.C.14', label: 'Reason for Drawing White Paper (C.14)', type: 'textblock' },
+      { path: 'rawFields.C.15', label: 'Reason for Preparation (C.15)', type: 'textblock' },
+    ],
+  },
+
+  // ============================================================
+  // Part D: Crypto-Asset Project
+  // ============================================================
   {
     id: 'partD',
     title: 'Part D: Project Information',
     description: 'Details about the crypto-asset project',
     fields: [
-      {
-        path: 'partD.cryptoAssetName',
-        label: 'Crypto-Asset Name',
-        type: 'text',
-        required: true,
-        placeholder: 'Name of the token',
-      },
-      {
-        path: 'partD.cryptoAssetSymbol',
-        label: 'Ticker Symbol',
-        type: 'text',
-        required: true,
-        placeholder: 'e.g., BTC, ETH',
-        maxLength: 10,
-      },
-      {
-        path: 'partD.totalSupply',
-        label: 'Total Supply',
-        type: 'number',
-        required: true,
-        placeholder: 'Maximum token supply',
-      },
-      {
-        path: 'partD.tokenStandard',
-        label: 'Token Standard',
-        type: 'text',
-        placeholder: 'e.g., ERC-20, BEP-20',
-      },
-      {
-        path: 'partD.blockchainNetwork',
-        label: 'Blockchain Network',
-        type: 'text',
-        placeholder: 'e.g., Ethereum, Chiliz Chain',
-      },
-      {
-        path: 'partD.consensusMechanism',
-        label: 'Consensus Mechanism',
-        type: 'text',
-        placeholder: 'e.g., Proof of Stake',
-      },
-      {
-        path: 'partD.projectDescription',
-        label: 'Project Description',
-        type: 'textblock',
-        required: true,
-        placeholder: 'Describe the project purpose and functionality',
-        maxLength: 5000,
-      },
+      { path: 'partD.cryptoAssetName', label: 'Crypto-Asset Name (D.2)', type: 'text', required: true, placeholder: 'Name of the token' },
+      { path: 'partD.cryptoAssetSymbol', label: 'Ticker Symbol (D.3)', type: 'text', required: true, placeholder: 'e.g., BTC, ETH', maxLength: 10 },
+      { path: 'partD.projectDescription', label: 'Project Description (D.4)', type: 'textblock', required: true, placeholder: 'Describe the project purpose and functionality', maxLength: 5000 },
+      { path: 'rawFields.D.5', label: 'Modification Conditions (D.5)', type: 'textblock', placeholder: 'Conditions for rights/obligations modification' },
+      { path: 'rawFields.D.6', label: 'Utility Token Classification (D.6)', type: 'boolean', helpText: 'Is this classified as a utility token?' },
+      { path: 'rawFields.D.7', label: 'Key Features of Goods/Services (D.7)', type: 'textblock', placeholder: 'For utility token projects' },
+      { path: 'rawFields.D.8', label: 'Planned Functional Use Date (D.8)', type: 'date', helpText: 'Date when token functionality becomes operational' },
+      { path: 'rawFields.D.9', label: 'Token Value Protection Schemes (D.9)', type: 'boolean' },
+      { path: 'rawFields.D.10', label: 'Protection Schemes Description (D.10)', type: 'textblock' },
+      { path: 'rawFields.D.11', label: 'Compensation Schemes (D.11)', type: 'boolean' },
+      { path: 'rawFields.D.12', label: 'Compensation Schemes Description (D.12)', type: 'textblock' },
+      { path: 'rawFields.D.13', label: 'Planned Use of Collected Funds (D.13)', type: 'textblock', placeholder: 'How collected funds will be used' },
+      { path: 'rawFields.D.14', label: 'Resource Allocation (D.14)', type: 'textblock', placeholder: 'Resource allocation details' },
+      { path: 'partD.totalSupply', label: 'Total Supply', type: 'number', required: true, placeholder: 'Maximum token supply' },
+      { path: 'partD.tokenStandard', label: 'Token Standard', type: 'text', placeholder: 'e.g., ERC-20, BEP-20' },
+      { path: 'partD.blockchainNetwork', label: 'Blockchain Network', type: 'text', placeholder: 'e.g., Ethereum, Chiliz Chain' },
+      { path: 'partD.consensusMechanism', label: 'Consensus Mechanism', type: 'text', placeholder: 'e.g., Proof of Stake' },
     ],
   },
+
+  // ============================================================
+  // Part E: Offer to the Public / Admission to Trading
+  // ============================================================
   {
     id: 'partE',
     title: 'Part E: Offering Details',
-    description: 'Information about the public offering',
+    description: 'Information about the public offering or admission to trading',
     fields: [
-      {
-        path: 'partE.isPublicOffering',
-        label: 'Is this a public offering?',
-        type: 'boolean',
-        required: true,
-      },
-      {
-        path: 'partE.publicOfferingStartDate',
-        label: 'Offering Start Date',
-        type: 'text',
-        placeholder: 'YYYY-MM-DD',
-      },
-      {
-        path: 'partE.publicOfferingEndDate',
-        label: 'Offering End Date',
-        type: 'text',
-        placeholder: 'YYYY-MM-DD',
-      },
-      {
-        path: 'partE.tokenPrice',
-        label: 'Token Price',
-        type: 'monetary',
-        placeholder: '0.00',
-      },
-      {
-        path: 'partE.maxSubscriptionGoal',
-        label: 'Maximum Subscription Goal',
-        type: 'monetary',
-        placeholder: '0.00',
-      },
-      {
-        path: 'partE.withdrawalRights',
-        label: 'Withdrawal Rights',
-        type: 'boolean',
-        helpText: 'Are purchasers entitled to withdrawal rights?',
-      },
+      { path: 'rawFields.E.1', label: 'Public Offering or Admission (E.1)', type: 'enumeration', options: PUBLIC_OFFERING_OPTIONS, helpText: 'Type of offering' },
+      { path: 'rawFields.E.2', label: 'Reasons for Public Offer (E.2)', type: 'textblock' },
+      { path: 'partE.maxSubscriptionGoal', label: 'Max Subscription Goal (E.3)', type: 'monetary', placeholder: '0.00' },
+      { path: 'rawFields.E.3a', label: 'Max Subscription (units) (E.3a)', type: 'number' },
+      { path: 'rawFields.E.4', label: 'Min Subscription Goal (E.4)', type: 'monetary', helpText: 'Minimum in currency' },
+      { path: 'rawFields.E.5', label: 'Fundraising Target (E.5)', type: 'monetary' },
+      { path: 'rawFields.E.6', label: 'Oversubscription Acceptance (E.6)', type: 'boolean' },
+      { path: 'rawFields.E.7', label: 'Oversubscription Allocation (E.7)', type: 'textblock' },
+      { path: 'partE.tokenPrice', label: 'Issue Price (E.8)', type: 'monetary', placeholder: '0.00' },
+      { path: 'rawFields.E.9', label: 'Currency for Issue Price (E.9)', type: 'enumeration', options: CURRENCY_OPTIONS },
+      { path: 'rawFields.E.9a', label: 'Other Tokens for Issue Price (E.9a)', type: 'text' },
+      { path: 'rawFields.E.10', label: 'Subscription Fee (E.10)', type: 'monetary' },
+      { path: 'rawFields.E.11', label: 'Price Determination Method (E.11)', type: 'textblock' },
+      { path: 'rawFields.E.12', label: 'Total Tokens Offered (E.12)', type: 'number' },
+      { path: 'rawFields.E.13', label: 'Targeted Holders (E.13)', type: 'enumeration', options: TARGETED_HOLDERS_OPTIONS },
+      { path: 'rawFields.E.14', label: 'Holder Restrictions (E.14)', type: 'textblock' },
+      { path: 'rawFields.E.15', label: 'Reimbursement Notice (E.15)', type: 'boolean' },
+      { path: 'rawFields.E.16', label: 'Refund Mechanism (E.16)', type: 'textblock' },
+      { path: 'rawFields.E.17', label: 'Refund Timeline (E.17)', type: 'textblock' },
+      { path: 'rawFields.E.18', label: 'Offer Phases (E.18)', type: 'textblock' },
+      { path: 'rawFields.E.19', label: 'Early Purchase Discount (E.19)', type: 'textblock' },
+      { path: 'rawFields.E.20', label: 'Time-Limited Offer (E.20)', type: 'boolean' },
+      { path: 'partE.publicOfferingStartDate', label: 'Subscription Start (E.21)', type: 'date' },
+      { path: 'partE.publicOfferingEndDate', label: 'Subscription End (E.22)', type: 'date' },
+      { path: 'rawFields.E.23', label: 'Safeguarding Arrangements (E.23)', type: 'textblock' },
+      { path: 'rawFields.E.24', label: 'Payment Methods (E.24)', type: 'textblock' },
+      { path: 'rawFields.E.25', label: 'Reimbursement Methods (E.25)', type: 'textblock' },
+      { path: 'partE.withdrawalRights', label: 'Withdrawal Rights (E.26)', type: 'boolean', helpText: 'Are purchasers entitled to withdrawal rights?' },
+      { path: 'rawFields.E.27', label: 'Transfer of Purchased Tokens (E.27)', type: 'textblock' },
+      { path: 'rawFields.E.28', label: 'Transfer Time Schedule (E.28)', type: 'text' },
+      { path: 'rawFields.E.29', label: 'Purchaser Technical Requirements (E.29)', type: 'textblock' },
+      { path: 'rawFields.E.30', label: 'CASP Name (E.30)', type: 'text' },
+      { path: 'rawFields.E.31', label: 'CASP LEI (E.31)', type: 'text', maxLength: 20 },
+      { path: 'rawFields.E.32', label: 'Placement Form (E.32)', type: 'enumeration', options: PLACEMENT_FORM_OPTIONS },
+      { path: 'rawFields.E.33', label: 'Trading Platform Name (E.33)', type: 'text' },
+      { path: 'rawFields.E.34', label: 'Trading Platform MIC (E.34)', type: 'text' },
+      { path: 'rawFields.E.35', label: 'Trading Platform Access (E.35)', type: 'textblock' },
+      { path: 'rawFields.E.36', label: 'Involved Costs (E.36)', type: 'textblock' },
+      { path: 'rawFields.E.37', label: 'Offer Expenses (E.37)', type: 'textblock' },
+      { path: 'rawFields.E.38', label: 'Conflicts of Interest (E.38)', type: 'textblock' },
+      { path: 'rawFields.E.39', label: 'Applicable Law (E.39)', type: 'textblock' },
+      { path: 'rawFields.E.40', label: 'Competent Court (E.40)', type: 'textblock' },
     ],
   },
+
+  // ============================================================
+  // Part F: Information about the Crypto-Asset
+  // ============================================================
+  {
+    id: 'partF',
+    title: 'Part F: Crypto-Asset Information',
+    description: 'Technical and regulatory details about the crypto-asset',
+    fields: [
+      { path: 'partF.classification', label: 'Token Type (F.1)', type: 'text', required: true },
+      { path: 'rawFields.F.2', label: 'Token Functionality (F.2)', type: 'textblock' },
+      { path: 'rawFields.F.3', label: 'Planned Application (F.3)', type: 'textblock' },
+      { path: 'rawFields.F.4', label: 'Type of White Paper (F.4)', type: 'enumeration', options: WHITE_PAPER_TYPE_OPTIONS },
+      { path: 'rawFields.F.5', label: 'Type of Submission (F.5)', type: 'enumeration', options: SUBMISSION_TYPE_OPTIONS },
+      { path: 'rawFields.F.6', label: 'Token Characteristics (F.6)', type: 'textblock' },
+      { path: 'rawFields.F.7', label: 'Commercial/Trading Name (F.7)', type: 'text' },
+      { path: 'rawFields.F.8', label: 'Issuer Website (F.8)', type: 'text', placeholder: 'https://...' },
+      { path: 'rawFields.F.9', label: 'Offer Starting Date (F.9)', type: 'date' },
+      { path: 'rawFields.F.10', label: 'Publication Date (F.10)', type: 'date' },
+      { path: 'rawFields.F.11', label: 'Other Services (F.11)', type: 'textblock' },
+      { path: 'rawFields.F.12', label: 'White Paper Languages (F.12)', type: 'text' },
+      { path: 'rawFields.F.13', label: 'Digital Token Identifier (F.13)', type: 'text', helpText: 'DTI code if available' },
+      { path: 'rawFields.F.14', label: 'Fungible Group DTI (F.14)', type: 'text' },
+      { path: 'rawFields.F.15', label: 'Voluntary Data Flag (F.15)', type: 'boolean' },
+      { path: 'rawFields.F.16', label: 'Personal Data Flag (F.16)', type: 'boolean' },
+      { path: 'rawFields.F.17', label: 'LEI Eligibility (F.17)', type: 'boolean' },
+      { path: 'rawFields.F.18', label: 'Home Member State (F.18)', type: 'enumeration', options: MEMBER_STATE_OPTIONS },
+      { path: 'partF.rightsDescription', label: 'Rights Description', type: 'textblock', required: true },
+    ],
+  },
+
+  // ============================================================
+  // Part G: Rights and Obligations
+  // ============================================================
+  {
+    id: 'partG',
+    title: 'Part G: Rights and Obligations',
+    description: 'Purchaser rights, obligations, and token supply mechanisms',
+    fields: [
+      { path: 'partG.purchaseRights', label: 'Purchaser Rights (G.1)', type: 'textblock', placeholder: 'Describe rights attached to the token' },
+      { path: 'rawFields.G.2', label: 'Exercise of Rights (G.2)', type: 'textblock' },
+      { path: 'rawFields.G.3', label: 'Modification Conditions (G.3)', type: 'textblock' },
+      { path: 'rawFields.G.4', label: 'Future Public Offers (G.4)', type: 'textblock' },
+      { path: 'rawFields.G.5', label: 'Issuer Retained Tokens (G.5)', type: 'number', helpText: 'Number of tokens retained by issuer' },
+      { path: 'rawFields.G.6', label: 'Utility Token Classification (G.6)', type: 'boolean' },
+      { path: 'rawFields.G.7', label: 'Key Features (Utility) (G.7)', type: 'textblock' },
+      { path: 'rawFields.G.8', label: 'Utility Token Redemption (G.8)', type: 'textblock' },
+      { path: 'rawFields.G.9', label: 'Non-Trading Request (G.9)', type: 'boolean' },
+      { path: 'rawFields.G.10', label: 'Purchase/Sale Modalities (G.10)', type: 'textblock' },
+      { path: 'partG.transferRestrictions', label: 'Transfer Restrictions (G.11)', type: 'textblock' },
+      { path: 'rawFields.G.12', label: 'Supply Adjustment Protocols (G.12)', type: 'boolean' },
+      { path: 'partG.dynamicSupplyMechanism', label: 'Supply Adjustment Mechanisms (G.13)', type: 'textblock' },
+      { path: 'rawFields.G.14', label: 'Token Value Protection (G.14)', type: 'boolean' },
+      { path: 'rawFields.G.15', label: 'Protection Schemes Description (G.15)', type: 'textblock' },
+      { path: 'rawFields.G.16', label: 'Compensation Schemes (G.16)', type: 'boolean' },
+      { path: 'rawFields.G.17', label: 'Compensation Description (G.17)', type: 'textblock' },
+      { path: 'rawFields.G.18', label: 'Applicable Law (G.18)', type: 'textblock' },
+      { path: 'rawFields.G.19', label: 'Competent Court (G.19)', type: 'textblock' },
+    ],
+  },
+
+  // ============================================================
+  // Part H: Underlying Technology
+  // ============================================================
   {
     id: 'partH',
     title: 'Part H: Technology',
-    description: 'Technical details about the underlying blockchain',
+    description: 'Technical details about the underlying blockchain and DLT',
     fields: [
-      {
-        path: 'partH.blockchainDescription',
-        label: 'Blockchain Description',
-        type: 'textblock',
-        required: true,
-        placeholder: 'Describe the underlying blockchain technology',
-        maxLength: 3000,
-      },
-      {
-        path: 'partH.smartContractInfo',
-        label: 'Smart Contract Information',
-        type: 'textblock',
-        placeholder: 'Contract addresses and details',
-      },
+      { path: 'partH.blockchainDescription', label: 'DLT Description (H.1)', type: 'textblock', required: true, placeholder: 'Describe the distributed ledger technology', maxLength: 5000 },
+      { path: 'rawFields.H.2', label: 'Protocols & Standards (H.2)', type: 'textblock' },
+      { path: 'rawFields.H.3', label: 'Technology Used (H.3)', type: 'textblock' },
+      { path: 'rawFields.H.4', label: 'Consensus Mechanism (H.4)', type: 'textblock' },
+      { path: 'rawFields.H.5', label: 'Incentive Mechanisms & Fees (H.5)', type: 'textblock' },
+      { path: 'rawFields.H.6', label: 'Uses DLT (H.6)', type: 'boolean' },
+      { path: 'rawFields.H.7', label: 'DLT Functionality (H.7)', type: 'textblock' },
+      { path: 'rawFields.H.8', label: 'Audit Conducted (H.8)', type: 'boolean' },
+      { path: 'rawFields.H.9', label: 'Audit Outcome (H.9)', type: 'textblock' },
+      { path: 'partH.smartContractInfo', label: 'Smart Contract Information', type: 'textblock', placeholder: 'Contract addresses and details' },
     ],
   },
+
+  // ============================================================
+  // Part I: Risk Disclosure & Compliance
+  // ============================================================
+  {
+    id: 'partI',
+    title: 'Part I: Risk Disclosure',
+    description: 'Risk factors and compliance statements',
+    fields: [
+      { path: 'rawFields.I.1', label: 'Offer-Related Risks (I.1)', type: 'textblock', required: true, placeholder: 'Describe risks related to the offering' },
+      { path: 'rawFields.I.2', label: 'Issuer-Related Risks (I.2)', type: 'textblock', required: true },
+      { path: 'rawFields.I.02a', label: 'Issuer Responsibility Statement (I.02a)', type: 'boolean' },
+      { path: 'rawFields.I.02b', label: 'Value & Transferability Risks Statement (I.02b)', type: 'boolean' },
+      { path: 'rawFields.I.03', label: 'Information Accuracy Statement (I.03)', type: 'boolean' },
+      { path: 'rawFields.I.3', label: 'Token-Related Risks (I.3)', type: 'textblock', required: true },
+      { path: 'rawFields.I.4', label: 'Project Implementation Risks (I.4)', type: 'textblock' },
+      { path: 'rawFields.I.5', label: 'Technology-Related Risks (I.5)', type: 'textblock', required: true },
+      { path: 'rawFields.I.6', label: 'Mitigation Measures (I.6)', type: 'textblock' },
+      { path: 'rawFields.I.07', label: 'Key Information About Offer (I.07)', type: 'textblock' },
+    ],
+  },
+
+  // ============================================================
+  // Part J: Environmental Impact
+  // ============================================================
   {
     id: 'partJ',
     title: 'Part J: Sustainability',
-    description: 'Environmental impact indicators',
+    description: 'Environmental impact and adverse climate impacts',
     fields: [
-      {
-        path: 'partJ.energyConsumption',
-        label: 'Energy Consumption (kWh)',
-        type: 'number',
-        placeholder: 'Annual energy consumption',
-      },
-      {
-        path: 'partJ.consensusMechanismType',
-        label: 'Consensus Mechanism Type',
-        type: 'text',
-        placeholder: 'e.g., PoS, PoW',
-      },
-      {
-        path: 'partJ.renewableEnergyPercentage',
-        label: 'Renewable Energy Percentage',
-        type: 'number',
-        placeholder: '0-100',
-        helpText: 'Percentage of energy from renewable sources',
-      },
+      { path: 'rawFields.J.1', label: 'Adverse Environmental Impacts (J.1)', type: 'textblock', placeholder: 'Describe adverse climate impacts' },
+      { path: 'partJ.energyConsumption', label: 'Energy Consumption (kWh)', type: 'number', placeholder: 'Annual energy consumption' },
+      { path: 'partJ.consensusMechanismType', label: 'Consensus Mechanism Type', type: 'text', placeholder: 'e.g., PoS, PoW' },
+      { path: 'partJ.renewableEnergyPercentage', label: 'Renewable Energy %', type: 'number', placeholder: '0-100', helpText: 'Percentage of energy from renewable sources' },
+    ],
+  },
+
+  // ============================================================
+  // Sustainability Indicators (Annex III)
+  // ============================================================
+  {
+    id: 'sustainability',
+    title: 'Annex III: Sustainability Indicators',
+    description: 'Detailed energy and GHG emission metrics (Annex III)',
+    fields: [
+      { path: 'rawFields.S.1', label: 'Name (S.1)', type: 'text' },
+      { path: 'rawFields.S.2', label: 'Relevant LEI (S.2)', type: 'text' },
+      { path: 'rawFields.S.3', label: 'Crypto-Asset Name (S.3)', type: 'text' },
+      { path: 'rawFields.S.4', label: 'Consensus Mechanism (S.4)', type: 'textblock' },
+      { path: 'rawFields.S.5', label: 'Incentive Mechanisms & Fees (S.5)', type: 'textblock' },
+      { path: 'rawFields.S.6', label: 'Beginning of Period (S.6)', type: 'date' },
+      { path: 'rawFields.S.7', label: 'End of Period (S.7)', type: 'date' },
+      { path: 'rawFields.S.8', label: 'Energy Consumption (S.8)', type: 'text', helpText: 'Total energy consumption value' },
+      { path: 'rawFields.S.9', label: 'Energy Sources & Methodologies (S.9)', type: 'textblock' },
+      { path: 'rawFields.S.10', label: 'Renewable Energy % (S.10)', type: 'number', helpText: 'Percentage as decimal (0.81 = 81%)' },
+      { path: 'rawFields.S.11', label: 'Energy Intensity (S.11)', type: 'text' },
+      { path: 'rawFields.S.12', label: 'Scope 1 GHG Emissions (S.12)', type: 'text' },
+      { path: 'rawFields.S.13', label: 'Scope 2 GHG Emissions (S.13)', type: 'text' },
+      { path: 'rawFields.S.14', label: 'GHG Intensity (S.14)', type: 'text' },
+      { path: 'rawFields.S.15', label: 'Key Energy Sources (S.15)', type: 'textblock' },
+      { path: 'rawFields.S.16', label: 'Key GHG Sources (S.16)', type: 'textblock' },
+      { path: 'rawFields.S.17', label: 'Energy Mix % (S.17)', type: 'number' },
+      { path: 'rawFields.S.18', label: 'Energy Use Reduction (S.18)', type: 'text' },
+      { path: 'rawFields.S.19', label: 'Carbon Intensity (S.19)', type: 'number' },
+      { path: 'rawFields.S.20', label: 'Scope 3 GHG Emissions (S.20)', type: 'text' },
     ],
   },
 ];

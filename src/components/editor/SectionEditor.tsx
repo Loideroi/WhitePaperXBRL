@@ -8,17 +8,19 @@
 
 import { ChevronDown, ChevronRight, AlertCircle, CheckCircle } from 'lucide-react';
 import { useState, useCallback } from 'react';
-import { TextField, BooleanField, MonetaryField, TextBlockField } from './fields';
+import { TextField, BooleanField, MonetaryField, TextBlockField, DateField, EnumerationField } from './fields';
 import type { MappedField, ConfidenceLevel } from '@/types/whitepaper';
 
 interface SectionField {
   path: string;
   label: string;
-  type: 'text' | 'boolean' | 'monetary' | 'textblock' | 'number';
+  type: 'text' | 'boolean' | 'monetary' | 'textblock' | 'number' | 'date' | 'enumeration';
   required?: boolean;
   placeholder?: string;
   helpText?: string;
   maxLength?: number;
+  /** Options for enumeration fields: key → human-readable label */
+  options?: Record<string, string>;
 }
 
 interface SectionEditorProps {
@@ -244,6 +246,39 @@ export function SectionEditor({
                     source={source}
                     error={error}
                     onChange={(path, val) => onFieldChange(path, val ? Number(val) : undefined)}
+                    helpText={field.helpText}
+                  />
+                );
+
+              case 'date':
+                return (
+                  <DateField
+                    key={field.path}
+                    path={field.path}
+                    label={field.label}
+                    value={(value as string) || ''}
+                    required={field.required}
+                    confidence={confidence}
+                    source={source}
+                    error={error}
+                    onChange={onFieldChange}
+                    helpText={field.helpText}
+                  />
+                );
+
+              case 'enumeration':
+                return (
+                  <EnumerationField
+                    key={field.path}
+                    path={field.path}
+                    label={field.label}
+                    value={value as string | undefined}
+                    options={field.options || {}}
+                    required={field.required}
+                    confidence={confidence}
+                    source={source}
+                    error={error}
+                    onChange={onFieldChange}
                     helpText={field.helpText}
                   />
                 );
