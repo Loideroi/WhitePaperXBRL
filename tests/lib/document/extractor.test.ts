@@ -98,7 +98,7 @@ describe('Document Extractor', () => {
     });
 
     it('should dispatch DOCX to officeparser', async () => {
-      vi.mocked(parseOffice).mockResolvedValue('DOCX content');
+      vi.mocked(parseOffice).mockResolvedValue('DOCX content' as never);
 
       const result = await extractDocument(
         Buffer.from('test'),
@@ -111,7 +111,7 @@ describe('Document Extractor', () => {
     });
 
     it('should dispatch ODT to officeparser', async () => {
-      vi.mocked(parseOffice).mockResolvedValue('ODT content');
+      vi.mocked(parseOffice).mockResolvedValue('ODT content' as never);
 
       const result = await extractDocument(
         Buffer.from('test'),
@@ -122,7 +122,7 @@ describe('Document Extractor', () => {
     });
 
     it('should dispatch RTF to officeparser', async () => {
-      vi.mocked(parseOffice).mockResolvedValue('RTF content');
+      vi.mocked(parseOffice).mockResolvedValue('RTF content' as never);
 
       const result = await extractDocument(Buffer.from('test'), 'application/rtf');
 
