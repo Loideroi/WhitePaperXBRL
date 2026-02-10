@@ -42,6 +42,19 @@ export interface InlineTagOptions {
 }
 
 /**
+ * Check if a value string represents a valid numeric value.
+ * Strips formatting characters (commas, currency symbols, whitespace, trailing periods)
+ * and checks if the result is a finite number.
+ */
+export function isValueNumeric(value: string): boolean {
+  if (!value || value.trim().length === 0) return false;
+  const cleaned = value.replace(/[,%$€£\s]/g, '').replace(/\.+$/, '');
+  if (cleaned.length === 0) return false;
+  const num = Number(cleaned);
+  return !isNaN(num) && isFinite(num);
+}
+
+/**
  * Wrap a value with the appropriate inline XBRL tag.
  *
  * Rules (ESMA Guidance 2.2.6):
@@ -52,16 +65,23 @@ export interface InlineTagOptions {
  * - dateItemType -> escape="false"
  * - percentItemType -> ix:nonFraction with unitRef="unit_pure"
  * - leiItemType -> escape="false"
+ *
+ * When a numeric type field contains non-numeric content (e.g., "Not applicable",
+ * narrative text), falls back to ix:nonNumeric to produce valid iXBRL.
  */
 export function wrapInlineTag(options: InlineTagOptions): string {
   const { id, name, contextRef, value, dataType, isTextBlock, unitRef, decimals } = options;
 
-  // Numeric types use ix:nonFraction
+  // Numeric types use ix:nonFraction only if the value is actually numeric
   if (isNumericType(dataType)) {
-    const unitAttr = unitRef ? ` unitRef="${unitRef}"` : '';
-    const decimalsAttr = decimals !== undefined ? ` decimals="${decimals}"` : '';
-    const formatAttr = ' format="ixt:num-dot-decimal"';
-    return `<ix:nonFraction id="${id}" name="${name}" contextRef="${contextRef}"${unitAttr}${decimalsAttr}${formatAttr}>${escapeHtml(value)}</ix:nonFraction>`;
+    if (isValueNumeric(value)) {
+      const unitAttr = unitRef ? ` unitRef="${unitRef}"` : '';
+      const decimalsAttr = decimals !== undefined ? ` decimals="${decimals}"` : '';
+      const formatAttr = ' format="ixt:num-dot-decimal"';
+      return `<ix:nonFraction id="${id}" name="${name}" contextRef="${contextRef}"${unitAttr}${decimalsAttr}${formatAttr}>${escapeHtml(value)}</ix:nonFraction>`;
+    }
+    // Content is not numeric — fall back to ix:nonNumeric (valid iXBRL for text overrides)
+    return `<ix:nonNumeric id="${id}" name="${name}" contextRef="${contextRef}" escape="false">${escapeHtml(value)}</ix:nonNumeric>`;
   }
 
   // Text block types: escape="true" with format

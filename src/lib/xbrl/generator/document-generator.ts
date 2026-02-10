@@ -14,7 +14,7 @@
 
 import type { XBRLContext, XBRLUnit, IXBRLDocument } from '@/types/xbrl';
 import type { WhitepaperData } from '@/types/whitepaper';
-import type { WhitepaperPart } from '@/types/taxonomy';
+import type { WhitepaperPart, XBRLDataType } from '@/types/taxonomy';
 import { buildAllContexts, getContextId } from './context-builder';
 import { STANDARD_UNITS } from './fact-builder';
 import { generateCSSStylesheet } from './template/css-styles';
@@ -26,7 +26,7 @@ import {
   type FactValue,
 } from './template/section-renderer';
 import { generateHiddenBlock, type HiddenFactEntry } from './template/hidden-facts';
-import { escapeHtml } from './template/inline-tagger';
+import { escapeHtml, getUnitRefForType } from './template/inline-tagger';
 import {
   getFieldsForSection,
   OTHR_FIELD_DEFINITIONS,
@@ -56,6 +56,52 @@ const NAMESPACES: Record<string, string> = {
  * Taxonomy reference - specific OTHR entry point
  */
 const TAXONOMY_REF = 'https://www.esma.europa.eu/taxonomy/2025-03-31/mica/mica_entry_table_2.xsd';
+
+const NUMERIC_DATA_TYPES: XBRLDataType[] = [
+  'monetaryItemType',
+  'decimalItemType',
+  'integerItemType',
+  'percentItemType',
+];
+
+/**
+ * Get default decimals value for a numeric data type.
+ */
+function getDefaultDecimals(dataType: XBRLDataType): number | undefined {
+  switch (dataType) {
+    case 'integerItemType':
+      return 0;
+    case 'monetaryItemType':
+    case 'decimalItemType':
+      return 2;
+    case 'percentItemType':
+      return 4;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Attempt to extract a numeric value from narrative text for numeric field types.
+ * E.g., "(Days) Response time: 7 days." → "7"
+ *       "600,000 tokens" → "600000"
+ *       "81%" → "81"
+ * Returns the original text if no number can be extracted.
+ */
+function tryExtractNumericValue(text: string, dataType: XBRLDataType): string {
+  if (!NUMERIC_DATA_TYPES.includes(dataType)) return text;
+
+  // Strip currency symbols, commas, percent signs for matching
+  const cleaned = text.replace(/[,$€£%]/g, '').trim();
+  // Match a number (possibly with decimal point) — take the first occurrence
+  const match = cleaned.match(/(\d+(?:\.\d+)?)/);
+  if (match && match[1] && isFinite(Number(match[1]))) {
+    return match[1];
+  }
+
+  // No number found — return original text (inline-tagger will handle fallback)
+  return text;
+}
 
 /**
  * Map whitepaper data to fact values for each field definition.
@@ -310,10 +356,15 @@ function mapDataToFactValues(
             });
           }
         } else {
-          // Regular field
+          // Regular field — for numeric types, attempt numeric extraction and add unitRef/decimals
+          const processedValue = tryExtractNumericValue(trimmedContent, fieldDef.dataType);
+          const unitRef = getUnitRefForType(fieldDef.dataType);
+          const decimals = getDefaultDecimals(fieldDef.dataType);
           values.set(fieldDef.xbrlElement, {
-            value: trimmedContent,
+            value: processedValue,
             contextRef: ctxRef,
+            ...(unitRef && { unitRef }),
+            ...(decimals !== undefined && { decimals }),
           });
         }
       }

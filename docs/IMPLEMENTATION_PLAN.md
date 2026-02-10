@@ -520,6 +520,41 @@ iXBRL preview functionality:
 
 ---
 
+## Phase 6a: Real-World Testing Fixes
+
+### Problem
+
+Testing with real whitepapers (ARG and SPURS) revealed that **numeric taxonomy fields were being tagged as `ix:nonFraction` but contained narrative text instead of numbers**, and were **missing required `unitRef` attributes**. This produces invalid iXBRL that fails ESMA validation.
+
+**Affected fields include:**
+
+| Field | Element | Data Type | Raw Content | Issue |
+|-------|---------|-----------|-------------|-------|
+| A.10 | `OfferorsResponseTimeDays` | integerItemType | "(Days) Response time: 7 days." | Text in nonFraction, no unitRef |
+| C.10 | `NumberOfUnits` | integerItemType | "Non-applicability of Part C…" | Text in nonFraction, no unitRef |
+| E.4 | `MinimumSubscriptionGoalExpressedInCurrency` | monetaryItemType | "No minimum goal." | Text in nonFraction, no unitRef |
+| S.10+ | `RenewableEnergyConsumptionPercentage` | percentItemType | "Not applicable" | Text in nonFraction, no unitRef |
+
+### Root Cause
+
+1. **rawFields fallback ignores data types**: When a field is not extracted via typed extraction, the fallback to `rawFields` (raw PDF text) sets no `unitRef` or `decimals`, and passes raw narrative text as the value.
+2. **No numeric content validation**: The inline tagger blindly wraps any value in `ix:nonFraction` if the field's data type is numeric, even when the content is text.
+
+### Fix (3-Part)
+
+1. **`inline-tagger.ts`**: Added `isValueNumeric()` function. Modified `wrapInlineTag()` to fall back to `ix:nonNumeric` (with `escape="false"`) when a numeric field contains non-numeric content.
+2. **`document-generator.ts`**: Added `getDefaultDecimals()` and `tryExtractNumericValue()` helpers. The rawFields fallback loop now computes and attaches default `unitRef`/`decimals` for numeric fields, and attempts to extract numeric values from narrative text (e.g., "7" from "(Days) Response time: 7 days.").
+3. **Tests**: Added `inline-tagger.test.ts` (isValueNumeric, wrapInlineTag fallback, getUnitRefForType) and `document-generator.test.ts` (rawFields numeric handling, iXBRL output verification).
+
+### Verification
+
+- Re-process ARG and SPURS whitepapers and confirm:
+  - Numeric fields with valid numbers produce `ix:nonFraction` with `unitRef`
+  - Numeric fields with text content produce `ix:nonNumeric` (valid fallback)
+  - No `ix:nonFraction` elements appear without `unitRef`
+
+---
+
 ## Phase 7: Testing and Security (Week 8)
 
 ### 7.1 Unit Tests
