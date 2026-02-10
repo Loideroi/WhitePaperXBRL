@@ -3,4 +3,4 @@
  */
 
 export { SectionEditor } from './SectionEditor';
-export { TextField, BooleanField, MonetaryField, TextBlockField } from './fields';
+export { TextField, BooleanField, MonetaryField, TextBlockField, DateField, EnumerationField, ManagementBodyTable } from './fields';

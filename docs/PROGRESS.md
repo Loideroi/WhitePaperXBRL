@@ -4,7 +4,7 @@
 
 | # | Item | Status | Commit |
 |---|------|--------|--------|
-| 1 | Phase 3: UI — Token Type Selector | PENDING | |
+| 1 | Phase 3: UI — Token Type Selector | DONE | (existed in UploadZone) |
 | 2 | Phase 3: UI — Field Editor (all sub-components) | DONE | see below |
 | 3 | Phase 3: UI — Validation Dashboard | DONE | (existed) |
 | 4 | Phase 3: UI — Preview Page | DONE | (existed) |
@@ -12,11 +12,11 @@
 | 6 | Phase 6: Integration — Error handling & loading states | DONE | (existed) |
 | 7 | Tier 1: ART Token Type (Table 3) | PENDING | |
 | 8 | Tier 1: EMT Token Type (Table 4) | PENDING | |
-| 9 | Tier 1: Block Tagging (ix:continuation / ix:exclude) | PENDING | |
-| 10 | Tier 1: Duplicate Fact Detection | PENDING | |
-| 11 | Tier 1: Multi-Language Output | PENDING | |
+| 9 | Tier 1: Block Tagging (ix:continuation / ix:exclude) | DONE | 5a53a53 |
+| 10 | Tier 1: Duplicate Fact Detection | DONE | bcba0c9 |
+| 11 | Tier 1: Multi-Language Output | DONE | 88e9978 |
 | 12 | Tier 2: iXBRL Preview (embedded viewer) | PENDING | |
-| 13 | Tier 2: GLEIF LEI Lookup | PENDING | |
+| 13 | Tier 2: GLEIF LEI Lookup | DONE | 53249c6 |
 | 14 | Tier 2: Session Persistence | PENDING | |
 | 15 | Tier 2: Authentication | PENDING | |
 | 16 | Tier 2: Redis Rate Limiting | PENDING | |
@@ -44,6 +44,30 @@
 
 ### Validation Dashboard (#3) & Preview Page (#4) & Error Handling (#6)
 - Already existed from prior implementation: `ValidationDashboard`, `IXBRLPreview`, error/loading states in transform page
+
+### Block Tagging (#9)
+- Added `ix:continuation` support for multi-fragment text blocks in inline-tagger
+- Added `ix:exclude` wrapping for nested non-fraction elements within text blocks
+- Section-renderer generates unique continuation IDs and links fragments
+- 41 tests covering block tagging scenarios
+
+### Multi-Language Output (#11)
+- New `language-support.ts` module with ISO 639-1 validation for all 24 EU languages
+- Language metadata (name, native name, direction) for each language
+- VAL-014 assertion in value-engine validates xml:lang attribute
+- English framework with extensible architecture for future language packs
+
+### Duplicate Fact Detection (#10)
+- New `duplicate-detector.ts` module identifies duplicate facts by concept+context+unit key
+- Integrated into validation orchestrator as part of the standard validation flow
+- 17 tests covering duplicate detection edge cases
+
+### GLEIF LEI Lookup (#13)
+- New `gleif-lookup.ts` module validates LEI codes against the GLEIF API
+- 5-second timeout with graceful fallback to local-only validation
+- New `/api/lei-lookup` route for client-side lookups
+- Optional `LEI_API_KEY` env var for authenticated API access
+- DOMException-safe error handling for jsdom compatibility
 
 ## Notes
 
