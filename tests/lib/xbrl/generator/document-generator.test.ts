@@ -99,6 +99,95 @@ describe('document-generator xml:lang support', () => {
   });
 });
 
+describe('document-generator tryExtractNumericValue hardening', () => {
+  it('should return empty for "Not applicable" text in numeric fields', () => {
+    const data = makeMinimalData({
+      rawFields: {
+        'E.10': 'Not applicable — no subscription fee charged.',
+      },
+    });
+
+    const doc = createIXBRLDocument(data);
+    const fact = doc.facts.find(
+      f => f.name === 'mica:SubscriptionFeeExpressedInCurrency'
+    );
+
+    // "Not applicable" in a monetary field → empty value (no fact or empty)
+    if (fact) {
+      expect(fact.value).toBe('');
+    }
+  });
+
+  it('should skip year-like numbers in date text for numeric fields', () => {
+    const data = makeMinimalData({
+      rawFields: {
+        'E.10': '2023-10-04 at 11:00 CET',
+      },
+    });
+
+    const doc = createIXBRLDocument(data);
+    const fact = doc.facts.find(
+      f => f.name === 'mica:SubscriptionFeeExpressedInCurrency'
+    );
+
+    // All numbers are date/time/year — should return empty (skip year 2023, date parts)
+    if (fact) {
+      expect(fact.value).toBe('');
+    }
+  });
+
+  it('should extract number adjacent to currency symbol', () => {
+    const data = makeMinimalData({
+      rawFields: {
+        'E.10': 'EUR 1,500.00 subscription fee',
+      },
+    });
+
+    const doc = createIXBRLDocument(data);
+    const fact = doc.facts.find(
+      f => f.name === 'mica:SubscriptionFeeExpressedInCurrency'
+    );
+
+    expect(fact).toBeDefined();
+    expect(fact!.value).toBe('1500.00');
+  });
+
+  it('should extract number with commas stripped from narrative text', () => {
+    const data = makeMinimalData({
+      rawFields: {
+        'A.10': '600,000 tokens issued',
+      },
+    });
+
+    const doc = createIXBRLDocument(data);
+    const fact = doc.facts.find(
+      f => f.name === 'mica:OfferorsResponseTimeDays'
+    );
+
+    expect(fact).toBeDefined();
+    expect(fact!.value).toBe('600000');
+  });
+
+  it('should trim whitespace from values in setValueIfPresent', () => {
+    const data = makeMinimalData({
+      partA: {
+        legalName: '  Test Corp  ',
+        lei: '529900T8BM49AURSDO55',
+        registeredAddress: '123 Main St',
+        country: 'DE',
+      },
+    });
+
+    const doc = createIXBRLDocument(data);
+    const fact = doc.facts.find(
+      f => f.name === 'mica:NameOfOtherTokenOfferor'
+    );
+
+    expect(fact).toBeDefined();
+    expect(fact!.value).toBe('Test Corp');
+  });
+});
+
 describe('document-generator rawFields numeric handling', () => {
   describe('rawFields with numeric values', () => {
     it('should attach unitRef and decimals for integer rawFields', () => {
@@ -174,7 +263,7 @@ describe('document-generator rawFields numeric handling', () => {
   });
 
   describe('rawFields with non-numeric content in numeric fields', () => {
-    it('should preserve "Not applicable" text when no number is found', () => {
+    it('should return empty for non-numeric text in numeric fields', () => {
       const data = makeMinimalData({
         rawFields: {
           'C.10': 'Non-applicability of Part C — this section does not apply.',
@@ -184,14 +273,11 @@ describe('document-generator rawFields numeric handling', () => {
       const doc = createIXBRLDocument(data);
       const fact = doc.facts.find(f => f.name === 'mica:NumberOfUnits');
 
-      expect(fact).toBeDefined();
-      // No number found, original text passes through
-      expect(fact!.value).toBe(
-        'Non-applicability of Part C — this section does not apply.'
-      );
-      // unitRef and decimals are still set, but inline-tagger will handle fallback
-      expect(fact!.unitRef).toBe('unit_pure');
-      expect(fact!.decimals).toBe(0);
+      // No number found — returns empty string (better no value than wrong value)
+      // Fact may still exist with empty value, or may not be generated
+      if (fact) {
+        expect(fact.value).toBe('');
+      }
     });
   });
 

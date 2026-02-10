@@ -92,16 +92,44 @@ function getDefaultDecimals(dataType: XBRLDataType): number | undefined {
 function tryExtractNumericValue(text: string, dataType: XBRLDataType): string {
   if (!NUMERIC_DATA_TYPES.includes(dataType)) return text;
 
-  // Strip currency symbols, commas, percent signs for matching
-  const cleaned = text.replace(/[,$€£%]/g, '').trim();
-  // Match a number (possibly with decimal point) — take the first occurrence
-  const match = cleaned.match(/(\d+(?:\.\d+)?)/);
-  if (match && match[1] && isFinite(Number(match[1]))) {
-    return match[1];
+  // If text indicates "not applicable", return empty string (skip the field)
+  if (/not\s+applicable|n\/a|none|nil/i.test(text)) {
+    return '';
   }
 
-  // No number found — return original text (inline-tagger will handle fallback)
-  return text;
+  // 1. Prefer numbers adjacent to currency symbols or units (search original text)
+  const currencyAdjacentMatch = text.match(
+    /(?:EUR|USD|CHF|€|\$)\s*([\d,]+(?:\.\d+)?)|(\d[\d,]*(?:\.\d+)?)\s*(?:EUR|USD|CHF|kWh|%)/i
+  );
+  if (currencyAdjacentMatch) {
+    const num = (currencyAdjacentMatch[1] || currencyAdjacentMatch[2] || '').replace(/,/g, '');
+    if (num && isFinite(Number(num))) return num;
+  }
+
+  // 2. Strip dates, times, and currency/percent before looking for standalone numbers
+  let cleaned = text;
+  // Remove ISO dates (2023-10-04), slash dates (04/10/2023), and long dates (October 4, 2023)
+  cleaned = cleaned.replace(/\d{4}[-/]\d{2}[-/]\d{2}/g, '');
+  cleaned = cleaned.replace(/\d{1,2}[-/]\d{1,2}[-/]\d{4}/g, '');
+  // Remove time patterns (11:00, 14:30:00)
+  cleaned = cleaned.replace(/\d{1,2}:\d{2}(?::\d{2})?\s*(?:CET|UTC|GMT|[AP]M)?/gi, '');
+  // Strip currency symbols, commas, percent signs
+  cleaned = cleaned.replace(/[,$€£%]/g, '').trim();
+
+  // Find remaining numbers
+  const numberMatches = [...cleaned.matchAll(/(\d+(?:\.\d+)?)/g)];
+  for (const m of numberMatches) {
+    const num = m[1];
+    if (num && isFinite(Number(num))) {
+      // Skip obvious year values (4-digit numbers 1900-2099)
+      const numVal = Number(num);
+      if (numVal >= 1900 && numVal <= 2099 && num.length === 4) continue;
+      return num;
+    }
+  }
+
+  // No valid number found — return empty string (better no value than wrong value)
+  return '';
 }
 
 /**
@@ -301,7 +329,7 @@ function mapDataToFactValues(
     if (value === undefined || value === null || value === '') return;
     const ctxRef = periodOverride === 'instant' ? instantContextId : durationContextId;
     values.set(element, {
-      value: String(value),
+      value: String(value).trim(),
       contextRef: ctxRef,
     });
   }
