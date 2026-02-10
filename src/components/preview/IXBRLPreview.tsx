@@ -128,7 +128,7 @@ export function IXBRLPreview({ content, filename, onClose, onDownload }: IXBRLPr
 
     return lines.map((line, lineIndex) => {
       // Apply highlighting patterns
-      let highlighted = line
+      const highlighted = line
         // Tags
         .replace(
           /(&lt;|<)(\/?)([\w:-]+)/g,

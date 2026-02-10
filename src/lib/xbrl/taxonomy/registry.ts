@@ -197,7 +197,6 @@ let registryInstance: TaxonomyRegistry | null = null;
 export function getTaxonomyRegistry(): TaxonomyRegistry {
   if (!registryInstance) {
     // Dynamically import the bundled data
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const data = require('./data/taxonomy-bundle.json') as BundledData;
     registryInstance = new TaxonomyRegistry(data);
   }

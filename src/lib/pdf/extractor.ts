@@ -80,8 +80,8 @@ function detectSections(text: string): Map<string, string> {
   const sections = new Map<string, string>();
   const lines = text.split('\n');
 
-  let currentSection: string | null = null;
-  let sectionContent: string[] = [];
+  const currentSection: string | null = null;
+  const sectionContent: string[] = [];
   const sectionPositions: { section: string; index: number }[] = [];
 
   // First pass: find section start positions
