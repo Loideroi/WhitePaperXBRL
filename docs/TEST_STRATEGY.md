@@ -8,12 +8,12 @@ This document outlines the testing strategy for the WhitePaper XBRL platform, in
 
 ## Current Test Status
 
-### Existing Test Files (18 unit + 1 E2E = 402 unit + 32 E2E)
+### Existing Test Files (18 unit + 1 E2E = 410 unit + 32 E2E)
 
 | File | Category | Description |
 |------|----------|-------------|
 | `tests/lib/pdf/extractor.test.ts` | Unit | PDF text extraction |
-| `tests/lib/pdf/field-mapper.test.ts` | Unit | Field mapping extraction |
+| `tests/lib/pdf/field-mapper.test.ts` | Unit | Field mapping extraction, ligature repair, section header stripping, field label stripping |
 | `tests/lib/document/extractor.test.ts` | Unit | Multi-format document extraction |
 | `tests/lib/xbrl/validator/lei-validator.test.ts` | Unit | LEI format + checksum |
 | `tests/lib/xbrl/validator/existence-engine.test.ts` | Unit | Existence assertions |

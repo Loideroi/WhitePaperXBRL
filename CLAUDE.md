@@ -145,7 +145,7 @@ For complex features, check these context documents:
 | Language Support | `src/lib/xbrl/generator/template/language-support.ts` |
 | Document Extractor | `src/lib/document/extractor.ts` |
 | PDF Extractor | `src/lib/pdf/extractor.ts` |
-| Field Mapper | `src/lib/pdf/field-mapper.ts` |
+| Field Mapper | `src/lib/pdf/field-mapper.ts` (includes `repairLigatures`, section header stripping) |
 | Upload API | `src/app/api/upload/route.ts` |
 | Validate API | `src/app/api/validate/route.ts` |
 | Generate API | `src/app/api/generate/route.ts` |

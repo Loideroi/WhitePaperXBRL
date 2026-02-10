@@ -104,9 +104,8 @@ The `extractAllRawFields()` function performs a comprehensive scan:
 3. Extracts content between consecutive field markers (content of field N ends where field N+1 begins)
 4. Expands range fields (e.g., `B.2-B12` populates `B.2` through `B.12`)
 5. Removes field labels from the start of content using `OTHR_FIELD_DEFINITIONS`
-6. Strips "No Field Content" placeholder text via `stripPlaceholderText()`
-7. Strips trailing periods from single-line values
-8. Applies `smartJoinLines()` and `cleanFieldContent()` for proper formatting
+6. Strips field number echo from start of content (e.g., `"E.2 Reasons for..."` → `"Reasons for..."`)
+7. Applies `cleanFieldContent()` which: strips "No Field Content" placeholders, repairs PDF ligature splitting (ff/fi/fl), applies `smartJoinLines()`, strips MiCA section header bleed, and strips trailing periods from single-line values
 
 For typed fields, `mapPdfToWhitepaper()` iterates over `MICA_SECTION_MAPPINGS` and uses:
 - `extractTableContent()` -- For single-line fields (filters "No Field Content" and "Field Content" artifacts)
@@ -182,8 +181,9 @@ The field mapper applies specialized transform functions to extract structured v
 | `cleanLegalName` | Removes "Name" prefix, normalizes whitespace |
 | `cleanCryptoAssetName` | Strips "Crypto-asset name" prefix and "project" suffix |
 | `cleanTickerSymbol` | Extracts `$SYMBOL` pattern or first uppercase token, removes `$` prefix |
-| `cleanTextContent` | Joins broken lines, collapses whitespace |
-| `cleanFieldContent` | Strips "No Field Content" placeholders, applies `smartJoinLines()`, strips trailing periods from single-line values |
+| `repairLigatures` | Fixes PDF ligature splitting where `pdf-parse` renders ff/fi/fl ligatures as separate chars with a space (e.g., `"o ffering"` → `"offering"`, `"bene fits"` → `"benefits"`) |
+| `cleanTextContent` | Repairs ligatures, joins broken lines, collapses whitespace, strips section header bleed from adjacent sections |
+| `cleanFieldContent` | Strips "No Field Content" placeholders, repairs ligatures, applies `smartJoinLines()`, strips section header bleed, strips trailing periods from single-line values |
 | `stripPlaceholderText` | Removes "No Field Content" placeholder text (standalone, at end of text, mid-text between sentences, or as full value) |
 
 ### Value Extraction
