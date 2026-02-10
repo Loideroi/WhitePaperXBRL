@@ -309,6 +309,41 @@ describe('Value Engine', () => {
 
         expect(result.errors.some((e) => e.ruleId === 'VAL-010')).toBe(true);
       });
+
+      it('should warn for non-EU language code (VAL-014)', () => {
+        const data: Partial<WhitepaperData> = {
+          ...createMinimalData(),
+          language: 'zh', // Valid 2-letter code but not an EU language
+        };
+
+        const result = validateValueAssertions(data, 'OTHR');
+
+        expect(result.warnings.some((w) => w.ruleId === 'VAL-014')).toBe(true);
+      });
+
+      it('should not warn for valid EU language code (VAL-014)', () => {
+        const data: Partial<WhitepaperData> = {
+          ...createMinimalData(),
+          language: 'de', // German - valid EU language
+        };
+
+        const result = validateValueAssertions(data, 'OTHR');
+
+        expect(result.warnings.some((w) => w.ruleId === 'VAL-014')).toBe(false);
+      });
+
+      it('should not trigger VAL-014 when VAL-010 already fails', () => {
+        const data: Partial<WhitepaperData> = {
+          ...createMinimalData(),
+          language: 'ENG', // Fails format check (VAL-010)
+        };
+
+        const result = validateValueAssertions(data, 'OTHR');
+
+        // VAL-010 triggers (format error), VAL-014 should NOT trigger
+        expect(result.errors.some((e) => e.ruleId === 'VAL-010')).toBe(true);
+        expect(result.warnings.some((w) => w.ruleId === 'VAL-014')).toBe(false);
+      });
     });
 
     describe('Cross-field validations', () => {

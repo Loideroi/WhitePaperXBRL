@@ -7,6 +7,7 @@
 import type { ValidationError } from '@/types/xbrl';
 import type { TokenType } from '@/types/taxonomy';
 import type { WhitepaperData } from '@/types/whitepaper';
+import { isValidLanguage, SUPPORTED_LANGUAGES } from '@/lib/xbrl/generator/template/language-support';
 
 /**
  * Value assertion definition
@@ -227,7 +228,7 @@ const COMMON_VALUE_ASSERTIONS: ValueAssertion[] = [
     },
   },
 
-  // Language validation
+  // Language validation — format check
   {
     id: 'VAL-010',
     description: 'Language must be 2-letter ISO code',
@@ -240,6 +241,26 @@ const COMMON_VALUE_ASSERTIONS: ValueAssertion[] = [
           ruleId: 'VAL-010',
           severity: 'ERROR',
           message: 'Language must be a 2-letter ISO 639-1 code (e.g., en, de, fr)',
+          fieldPath: 'language',
+        };
+      }
+      return null;
+    },
+  },
+
+  // Language validation — MiCA supported EU language
+  {
+    id: 'VAL-014',
+    description: 'Language must be a supported EU official language per MiCA Article 6(7)',
+    tokenTypes: ['OTHR', 'ART', 'EMT'],
+    severity: 'WARNING',
+    validate: (data) => {
+      const lang = data.language;
+      if (lang && /^[a-z]{2}$/.test(lang) && !isValidLanguage(lang)) {
+        return {
+          ruleId: 'VAL-014',
+          severity: 'WARNING',
+          message: `Language '${lang}' is not a supported EU official language. Supported: ${SUPPORTED_LANGUAGES.join(', ')}`,
           fieldPath: 'language',
         };
       }
