@@ -7,11 +7,11 @@
 | Phase 0: Project Setup | **COMPLETE** | Next.js 16, TypeScript strict, Vitest, Playwright |
 | Phase 1: Core Types & Taxonomy | **COMPLETE** | Types defined, taxonomy bundled as JSON |
 | Phase 2: Document Processing | **COMPLETE** | Multi-format: PDF, DOCX, ODT, RTF via `pdf-parse` + `officeparser` |
-| Phase 3: User Interface | **PARTIAL** | UploadZone done, transform page exists, preview page empty |
+| Phase 3: User Interface | **COMPLETE** | UploadZone, FieldEditor (all sub-components), ValidationDashboard, Preview |
 | Phase 4: iXBRL Generation | **COMPLETE** | document-generator, context-builder, fact-builder, template system |
-| Phase 5: Validation Engine | **COMPLETE** | orchestrator, existence-engine, value-engine, lei-validator |
-| Phase 6: Integration & Polish | **IN PROGRESS** | End-to-end flow needs completion |
-| Phase 7: Testing & Security | **IN PROGRESS** | 8 unit test files + 1 E2E test; fixture dirs empty |
+| Phase 5: Validation Engine | **COMPLETE** | orchestrator, existence-engine, value-engine, lei-validator, duplicate-detector, gleif-lookup |
+| Phase 6: Integration & Polish | **COMPLETE** | End-to-end flow, error handling, loading states |
+| Phase 7: Testing & Security | **IN PROGRESS** | 13 unit test files, 279 tests passing; integration/E2E/security audit pending |
 | Phase 8: Deployment | **NOT STARTED** | Vercel config pending |
 
 ### Key Implementation Deviations from Plan
@@ -21,6 +21,7 @@
 - **Validation assertions** are coded directly in engine files, not parsed from formula linkbase XML
 - **No `pdfjs-dist`** dependency — only `pdf-parse` is used for PDF extraction
 - **No Supabase/Redis** integration — sessions are in-memory only (Phase 1 scope)
+- **New validation modules** added beyond original plan: duplicate-detector, gleif-lookup (GLEIF API), language-support (24 EU languages), block tagging (ix:continuation/ix:exclude)
 
 ---
 
@@ -460,8 +461,10 @@ API endpoint for validation:
 ### 5.7 Deliverables Checklist
 
 - [ ] All 257 existence assertions implemented
-- [ ] All 223 value assertions implemented
+- [ ] All 224 value assertions implemented
 - [ ] LEI validation working
+- [ ] Duplicate fact detection working
+- [ ] GLEIF LEI lookup integrated
 - [ ] Validation API functional
 - [ ] Error messages clear and actionable
 - [ ] Performance: <10 seconds for full validation
