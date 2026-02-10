@@ -2,7 +2,7 @@
 
 A Next.js web application that transforms crypto-asset whitepaper documents into MiCA-compliant iXBRL files for regulatory submission to ESMA and National Competent Authorities (NCAs).
 
-As of December 23, 2025, all MiCA crypto-asset whitepapers must be submitted in Inline XBRL (iXBRL) format per Commission Implementing Regulation (EU) 2024/2984. This tool automates that transformation by extracting structured data from uploaded documents, validating it against ESMA's 486 taxonomy assertions, and generating submission-ready iXBRL/XHTML files.
+As of December 23, 2025, all MiCA crypto-asset whitepapers must be submitted in Inline XBRL (iXBRL) format per Commission Implementing Regulation (EU) 2024/2984. This tool automates that transformation by extracting structured data from uploaded documents, validating it against ESMA's 488 taxonomy assertions, and generating submission-ready iXBRL/XHTML files.
 
 ## Quick Start
 
@@ -27,7 +27,7 @@ Upload Document → Extract Text → Map Fields → Review/Edit → Validate →
 ```
 
 - **Document Extraction**: Multi-format text extraction with three-pass field mapping (MiCA table format, pattern matching, label matching)
-- **Validation Engine**: 257 existence assertions + 223 value assertions + 6 LEI checks, with full/quick/single-field modes
+- **Validation Engine**: 257 existence assertions + 224 value assertions + 6 LEI checks + 1 duplicate detection, with full/quick/single-field modes
 - **iXBRL Generation**: XHTML output with inline XBRL tags, proper namespace declarations, embedded CSS, and ix:hidden enumeration facts
 - **Taxonomy**: ESMA MiCA taxonomy (2025-03-31) bundled as JSON — closed/fixed, no extensions allowed
 

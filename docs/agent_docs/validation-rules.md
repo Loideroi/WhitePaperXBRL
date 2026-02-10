@@ -7,9 +7,10 @@ This document describes the validation rules that must be implemented to ensure 
 ### Assertion Totals (ESMA Reporting Manual)
 
 - **257** existence assertions (required fields present)
-- **223** value assertions (field value formats/constraints)
+- **224** value assertions (field value formats/constraints)
 - **6** LEI assertions (format + checksum + optional GLEIF)
-- **486 total** assertions
+- **1** duplicate detection assertion
+- **488 total** assertions
 
 ---
 
@@ -32,8 +33,9 @@ This document describes the validation rules that must be implemented to ensure 
 
 ### 4. Formula Assertions
 - 257 existence assertions
-- 223 value assertions
+- 224 value assertions
 - 6 LEI assertions
+- 1 duplicate detection assertion
 
 ### 5. ESMA Filing Rules (Reporting Manual)
 - Duplicate fact validation
@@ -719,4 +721,5 @@ For per-field validation in the editor UI, `validateField()` runs all engines bu
 | ART (Table 3) | 103 | 62 | 165 |
 | EMT (Table 4) | 82 | 22 | 104 |
 | LEI | - | 6 | 6 |
-| **Total** | **257** | **229** | **486** |
+| Duplicate | - | 1 | 1 |
+| **Total** | **257** | **230** | **488** |

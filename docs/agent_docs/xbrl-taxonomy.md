@@ -504,7 +504,7 @@ Check that required fields are present.
 | Table 3 | 103 |
 | Table 4 | 82 |
 
-### Value Assertions (223 total)
+### Value Assertions (224 total)
 
 Check field values and cross-field relationships.
 
@@ -518,9 +518,9 @@ Check field values and cross-field relationships.
 
 From LEI taxonomy -- validate LEI format and checksum.
 
-### Total: 486 Assertions
+### Total: 488 Assertions
 
-257 existence + 223 value + 6 LEI = 486
+257 existence + 224 value + 6 LEI + 1 duplicate = 488
 
 ### Severity Levels
 

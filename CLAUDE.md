@@ -140,6 +140,9 @@ For complex features, check these context documents:
 | Existence Engine | `src/lib/xbrl/validator/existence-engine.ts` |
 | Value Engine | `src/lib/xbrl/validator/value-engine.ts` |
 | LEI Validator | `src/lib/xbrl/validator/lei-validator.ts` |
+| Duplicate Detector | `src/lib/xbrl/validator/duplicate-detector.ts` |
+| GLEIF Lookup | `src/lib/xbrl/validator/gleif-lookup.ts` |
+| Language Support | `src/lib/xbrl/generator/template/language-support.ts` |
 | Document Extractor | `src/lib/document/extractor.ts` |
 | PDF Extractor | `src/lib/pdf/extractor.ts` |
 | Field Mapper | `src/lib/pdf/field-mapper.ts` |
