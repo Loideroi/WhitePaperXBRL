@@ -8,24 +8,29 @@ This document outlines the testing strategy for the WhitePaper XBRL platform, in
 
 ## Current Test Status
 
-### Existing Test Files (13 unit + 1 E2E)
+### Existing Test Files (18 unit + 1 E2E)
 
 | File | Category | Description |
 |------|----------|-------------|
 | `tests/lib/pdf/extractor.test.ts` | Unit | PDF text extraction |
 | `tests/lib/pdf/field-mapper.test.ts` | Unit | Field mapping extraction |
+| `tests/lib/document/extractor.test.ts` | Unit | Multi-format document extraction |
 | `tests/lib/xbrl/validator/lei-validator.test.ts` | Unit | LEI format + checksum |
 | `tests/lib/xbrl/validator/existence-engine.test.ts` | Unit | Existence assertions |
 | `tests/lib/xbrl/validator/value-engine.test.ts` | Unit | Value assertions |
+| `tests/lib/xbrl/validator/orchestrator.test.ts` | Unit | Validation orchestrator |
 | `tests/lib/xbrl/validator/duplicate-detector.test.ts` | Unit | Duplicate fact detection |
 | `tests/lib/xbrl/validator/gleif-lookup.test.ts` | Unit | GLEIF LEI lookup |
 | `tests/lib/xbrl/taxonomy/registry.test.ts` | Unit | Taxonomy loading |
 | `tests/lib/xbrl/generator/document-generator.test.ts` | Unit | iXBRL document generation |
+| `tests/lib/xbrl/generator/context-builder.test.ts` | Unit | XBRL context building |
+| `tests/lib/xbrl/generator/fact-builder.test.ts` | Unit | XBRL fact building |
 | `tests/lib/xbrl/generator/template/inline-tagger.test.ts` | Unit | Inline XBRL tagging |
 | `tests/lib/xbrl/generator/template/language-support.test.ts` | Unit | Multi-language validation |
 | `tests/lib/security/sanitize.test.ts` | Unit | Sanitization functions |
+| `tests/lib/security/rate-limiter.test.ts` | Unit | Rate limiting |
 | `tests/lib/utils.test.ts` | Unit | Utility functions |
-| `tests/e2e/home.spec.ts` | E2E | Home page upload workflow |
+| `tests/e2e/whitepaper-pipeline.test.ts` | E2E | Whitepaper-to-iXBRL pipeline |
 
 ### Known Gaps
 

@@ -11,8 +11,8 @@
 | Phase 4: iXBRL Generation | **COMPLETE** | document-generator, context-builder, fact-builder, template system |
 | Phase 5: Validation Engine | **COMPLETE** | orchestrator, existence-engine, value-engine, lei-validator, duplicate-detector, gleif-lookup |
 | Phase 6: Integration & Polish | **COMPLETE** | End-to-end flow, error handling, loading states |
-| Phase 7: Testing & Security | **IN PROGRESS** | 13 unit test files, 279 tests passing; integration/E2E/security audit pending |
-| Phase 8: Deployment | **NOT STARTED** | Vercel config pending |
+| Phase 7: Testing & Security | **COMPLETE** | 18 unit test files + 1 E2E, 417 tests passing (385 unit + 32 E2E) |
+| Phase 8: Deployment | **COMPLETE** | Deployed on Vercel |
 
 ### Key Implementation Deviations from Plan
 
