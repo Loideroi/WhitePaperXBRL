@@ -519,6 +519,31 @@ describe('mapPdfToWhitepaper', () => {
         expect(rawI1).not.toContain('o ffering');
       }
     });
+
+    it('should repair ligatures with non-breaking space (\\u00A0)', () => {
+      const extraction = createExtractionResult([
+        ['partH', 'H.1    Distributed ledger technology    The o\u00A0ffering provides bene\u00A0fits'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      const desc = result.data.partH?.blockchainDescription;
+      expect(desc).toContain('offering');
+      expect(desc).toContain('benefits');
+      expect(desc).not.toContain('\u00A0ff');
+    });
+
+    it('should repair ligatures with tab character', () => {
+      const extraction = createExtractionResult([
+        ['partH', 'H.1    Distributed ledger technology    The speci\tfic con\tfirmed result'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      const desc = result.data.partH?.blockchainDescription;
+      expect(desc).toContain('specific');
+      expect(desc).toContain('confirmed');
+    });
   });
 
   describe('Section header bleed stripping', () => {

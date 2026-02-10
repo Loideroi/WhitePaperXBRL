@@ -1089,12 +1089,15 @@ function extractAllRawFields(text: string): Record<string, string> {
     // Extract and clean the content
     let content = normalizedText.slice(contentStart, contentEnd).trim();
 
+    // Repair ligatures early so label matching works on clean text
+    content = repairLigatures(content);
+
     // Remove field labels that appear at the start (e.g., "Name Socios Technologies AG")
     // by finding where the actual content starts after the label
     content = removeFieldLabelFromContent(content, current.fieldNum);
 
     // Strip field number echo from start of content (e.g., "E.2  Reasons for..." → "Reasons for...")
-    content = content.replace(/^[A-J]\.\d+[a-z]?\s+/, '');
+    content = content.replace(/^[A-JS]\.\d+[a-z]?\s+/, '');
 
     // Clean up formatting
     content = cleanFieldContent(content);
@@ -1280,11 +1283,12 @@ function smartJoinLines(text: string): string {
 function repairLigatures(text: string): string {
   let result = text;
   // ff ligature: "o ffering" → "offering", "a ffiliate" → "affiliate"
-  result = result.replace(/([a-zA-Z]) (ff[a-z])/g, '$1$2');
+  // Use \s instead of literal space — pdf-parse may insert \u00A0 or other whitespace
+  result = result.replace(/([a-zA-Z])\s(ff[a-z])/g, '$1$2');
   // fi ligature: "bene fits" → "benefits", "speci fic" → "specific"
-  result = result.replace(/([a-zA-Z]) (fi[a-z])/g, '$1$2');
+  result = result.replace(/([a-zA-Z])\s(fi[a-z])/g, '$1$2');
   // fl ligature: "a fflicted" → "afflicted", "in flation" → "inflation"
-  result = result.replace(/([a-zA-Z]) (fl[a-z])/g, '$1$2');
+  result = result.replace(/([a-zA-Z])\s(fl[a-z])/g, '$1$2');
   return result;
 }
 
