@@ -607,9 +607,8 @@ The following endpoints are planned for future phases but are not currently avai
 - **GET /api/generate/:documentId/preview** -- Browser-based iXBRL preview
 - **GET /api/taxonomy/elements** -- Query taxonomy elements by token type
 - **GET /api/taxonomy/enumerations/:domain** -- Enumerate valid values for a domain
-- **POST /api/lei/validate** -- Standalone LEI validation endpoint (currently LEI validation is performed inline during `/api/validate`)
-- **Webhook events** -- Async event notifications (`upload.complete`, `validation.complete`, etc.)
-- **JWT authentication** -- Supabase Auth integration
+- **GLEIF LEI lookup** -- Enhance existing validation with GLEIF database verification (currently format/checksum only)
+- **Authentication** -- User accounts with session-scoped data isolation (technology TBD)
 
 ---
 

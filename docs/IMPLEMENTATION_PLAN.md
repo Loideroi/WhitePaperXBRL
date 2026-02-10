@@ -213,7 +213,7 @@ Functionality:
 - Accept PDF uploads (max 50MB)
 - Validate file type server-side
 - Generate unique session ID
-- Store temporarily (Vercel Blob or memory)
+- Store temporarily in memory (session persistence via database is a future roadmap item)
 - Return session ID to client
 
 **Security Checks:**
