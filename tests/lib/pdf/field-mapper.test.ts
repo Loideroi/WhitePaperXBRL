@@ -293,6 +293,63 @@ describe('mapPdfToWhitepaper', () => {
     });
   });
 
+  describe('Placeholder text stripping', () => {
+    it('should return empty for standalone "No Field Content"', () => {
+      const extraction = createExtractionResult([
+        ['partA', 'A.1    Legal Name    No Field Content'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      // Should not extract a legal name value
+      expect(result.data.partA?.legalName).toBeUndefined();
+    });
+
+    it('should strip "No Field Content" at end of real content', () => {
+      const extraction = createExtractionResult([
+        ['partH', 'H.1    Distributed ledger technology    The Chiliz Chain is an EVM compatible layer 1 blockchain that supports CAP-20 tokens No Field Content'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      expect(result.data.partH?.blockchainDescription).not.toContain('No Field Content');
+      expect(result.data.partH?.blockchainDescription).toContain('Chiliz Chain');
+    });
+
+    it('should strip "No Field Content" on separate line within content', () => {
+      const extraction = createExtractionResult([
+        ['partH', 'H.1    Distributed ledger technology    The Chiliz Chain is a blockchain.\nNo Field Content\nIt supports smart contracts.'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      expect(result.data.partH?.blockchainDescription).not.toContain('No Field Content');
+    });
+
+    it('should strip mid-text "No Field Content" between sentences', () => {
+      const extraction = createExtractionResult([
+        ['partH', 'H.1    Distributed ledger technology    The Chiliz Chain is a blockchain technology. No Field Content The protocol uses Proof of Stake.'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      const desc = result.data.partH?.blockchainDescription;
+      expect(desc).not.toContain('No Field Content');
+      expect(desc).toContain('blockchain technology');
+      expect(desc).toContain('Proof of Stake');
+    });
+
+    it('should not alter content without placeholder text', () => {
+      const extraction = createExtractionResult([
+        ['partA', 'A.1    Legal Name    Socios Technologies AG'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      expect(result.data.partA?.legalName).toBe('Socios Technologies AG');
+    });
+  });
+
   describe('Mappings tracking', () => {
     it('should track all extracted mappings', () => {
       const extraction = createExtractionResult([

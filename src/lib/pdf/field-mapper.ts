@@ -834,7 +834,7 @@ function extractTableContent(text: string, sectionNum: string, fieldNames: strin
     const match = text.match(pattern);
     if (match?.[1]) {
       const content = match[1].trim();
-      if (content.length > 1 && !/^(Field|Content|No)$/i.test(content)) {
+      if (content.length > 1 && !/^(Field|Content|No|No\s+Field\s+Content)$/i.test(content)) {
         return content;
       }
     }
@@ -857,7 +857,9 @@ function extractTableContent(text: string, sectionNum: string, fieldNames: strin
         break;
       }
     }
-    if (content.length > 1) {
+    // Strip placeholder text and filter table header artifacts
+    content = stripPlaceholderText(content);
+    if (content && content.length > 1 && !/^(Field|Content|Field\s+Content|No\s+Field\s+Content)$/i.test(content)) {
       return content;
     }
   }
@@ -891,8 +893,9 @@ function extractMultiLineTableContent(text: string, sectionNum: string, fieldNam
 
       // Clean up the content
       content = cleanTextContent(content);
+      content = stripPlaceholderText(content);
 
-      if (content.length > 20) {
+      if (content && content.length > 20) {
         return content;
       }
     }
@@ -1174,8 +1177,12 @@ function smartJoinLines(text: string): string {
  * Clean field content - remove excess whitespace, normalize formatting
  */
 function cleanFieldContent(content: string): string {
-  // First apply smart line joining to handle PDF text wrapping
-  let cleaned = smartJoinLines(content);
+  // Strip PDF placeholder text before any other processing
+  let cleaned = stripPlaceholderText(content);
+  if (!cleaned) return '';
+
+  // Apply smart line joining to handle PDF text wrapping
+  cleaned = smartJoinLines(cleaned);
 
   // Collapse excessive paragraph breaks
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
@@ -1188,6 +1195,30 @@ function cleanFieldContent(content: string): string {
     .trim();
 
   return cleaned;
+}
+
+/**
+ * Strip "No Field Content" placeholder text that appears in PDF table cells.
+ * Handles: standalone, at end of text, mid-text (between sentences), and full-value.
+ */
+function stripPlaceholderText(text: string): string {
+  // If the entire value is just "No Field Content", return empty
+  if (/^\s*No\s+Field\s+Content\s*$/i.test(text)) {
+    return '';
+  }
+
+  let cleaned = text;
+
+  // Remove standalone occurrences (full line or surrounded by whitespace/newlines)
+  cleaned = cleaned.replace(/\n\s*No\s+Field\s+Content\s*(?:\n|$)/gi, '\n');
+
+  // Remove at end of text
+  cleaned = cleaned.replace(/\s*No\s+Field\s+Content\s*$/gi, '');
+
+  // Remove mid-text occurrences (between sentences: ". No Field Content The next...")
+  cleaned = cleaned.replace(/([.!?'"])\s*No\s+Field\s+Content\s+/gi, '$1 ');
+
+  return cleaned.trim();
 }
 
 /**
@@ -1383,13 +1414,14 @@ export function mapPdfToWhitepaper(
           content = firstLine.trim().slice(0, 500);
         }
 
-        // Clean up common prefixes
+        // Clean up common prefixes and placeholder text
         content = content
           .replace(/^[:\s]+/, '')
           .replace(/^(is|are|the|a|an)\s+/i, '')
           .trim();
+        content = stripPlaceholderText(content);
 
-        if (content.length > 2) {
+        if (content && content.length > 2) {
           const value = mapping.transform ? mapping.transform(content, fullText) : content;
 
           if (value !== undefined && value !== null && value !== '') {
