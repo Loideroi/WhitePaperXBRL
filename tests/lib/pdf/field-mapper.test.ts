@@ -451,4 +451,116 @@ describe('mapPdfToWhitepaper', () => {
       expect(result.mappings[0]).toHaveProperty('confidence');
     });
   });
+
+  describe('Ligature repair', () => {
+    it('should repair ff ligature splitting in extracted content', () => {
+      const extraction = createExtractionResult([
+        ['partH', 'H.1    Distributed ledger technology    The public o ffering of crypto-assets provides bene fits to a ffiliates'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      const desc = result.data.partH?.blockchainDescription;
+      expect(desc).toContain('offering');
+      expect(desc).toContain('benefits');
+      expect(desc).toContain('affiliates');
+      expect(desc).not.toContain('o ffering');
+      expect(desc).not.toContain('bene fits');
+      expect(desc).not.toContain('a ffiliates');
+    });
+
+    it('should repair fi ligature splitting', () => {
+      const extraction = createExtractionResult([
+        ['partH', 'H.1    Distributed ledger technology    The speci fic classi fication was con firmed'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      const desc = result.data.partH?.blockchainDescription;
+      expect(desc).toContain('specific');
+      expect(desc).toContain('classification');
+      expect(desc).toContain('confirmed');
+    });
+
+    it('should repair fl ligature splitting', () => {
+      const extraction = createExtractionResult([
+        ['partH', 'H.1    Distributed ledger technology    The in flation rate re flects market conditions'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      const desc = result.data.partH?.blockchainDescription;
+      expect(desc).toContain('inflation');
+      expect(desc).toContain('reflects');
+    });
+
+    it('should not alter text without ligature issues', () => {
+      const extraction = createExtractionResult([
+        ['partH', 'H.1    Distributed ledger technology    The blockchain uses standard protocols'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      expect(result.data.partH?.blockchainDescription).toBe('The blockchain uses standard protocols');
+    });
+
+    it('should repair ligatures in rawFields content', () => {
+      const extraction = createExtractionResult([
+        ['partI', 'I.1    Offer-related risks    The o ffering carries speci fic risks for a ffiliates'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      const rawI1 = result.data.rawFields?.['I.1'];
+      expect(rawI1).toBeDefined();
+      if (rawI1) {
+        expect(rawI1).toContain('offering');
+        expect(rawI1).toContain('specific');
+        expect(rawI1).not.toContain('o ffering');
+      }
+    });
+  });
+
+  describe('Section header bleed stripping', () => {
+    it('should strip section header from end of content', () => {
+      const extraction = createExtractionResult([
+        ['partH', 'H.1    Distributed ledger technology    The blockchain is secure.\n\nPart D:\nInformation about the crypto-asset project'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      const desc = result.data.partH?.blockchainDescription;
+      expect(desc).toContain('blockchain is secure');
+      expect(desc).not.toContain('Part D');
+      expect(desc).not.toContain('Information about');
+    });
+
+    it('should not strip content that does not end with a section header', () => {
+      const extraction = createExtractionResult([
+        ['partH', 'H.1    Distributed ledger technology    The blockchain supports smart contracts and DApps'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      expect(result.data.partH?.blockchainDescription).toBe('The blockchain supports smart contracts and DApps');
+    });
+  });
+
+  describe('Field label prefix stripping', () => {
+    it('should strip field number echo from rawFields content', () => {
+      // When the table parser captures "E.2 Reasons for public offer..." the field number
+      // prefix "E.2" should be stripped since it duplicates the key
+      const extraction = createExtractionResult([
+        ['partE', 'E.1    Public Offering    Yes\nE.2    Reasons for public offer or admission to trading    The $TOKEN is offered to fans'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      const rawE2 = result.data.rawFields?.['E.2'];
+      if (rawE2) {
+        // Should not start with "E.2"
+        expect(rawE2).not.toMatch(/^E\.2\s/);
+      }
+    });
+  });
 });

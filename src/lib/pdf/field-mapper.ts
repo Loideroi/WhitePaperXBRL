@@ -380,11 +380,15 @@ function cleanTickerSymbol(text: string): string {
  * Clean text content - remove table formatting artifacts
  */
 function cleanTextContent(text: string): string {
-  return text
+  let cleaned = repairLigatures(text)
     .replace(/\n{2,}/g, '\n\n')
     .replace(/([a-z])\n([a-z])/gi, '$1 $2')  // Join broken lines mid-sentence
     .replace(/\s{2,}/g, ' ')
     .trim();
+  // Strip MiCA section headers that bleed from adjacent sections
+  cleaned = cleaned.replace(/[\n ]+Part\s+[A-J]:\s*\n[A-Z][^\n]+$/, '');
+  cleaned = cleaned.replace(/\s+Part\s+[A-J]:\s+[A-Z][A-Za-z ]+$/, '');
+  return cleaned;
 }
 
 /**
@@ -1089,6 +1093,9 @@ function extractAllRawFields(text: string): Record<string, string> {
     // by finding where the actual content starts after the label
     content = removeFieldLabelFromContent(content, current.fieldNum);
 
+    // Strip field number echo from start of content (e.g., "E.2  Reasons for..." → "Reasons for...")
+    content = content.replace(/^[A-J]\.\d+[a-z]?\s+/, '');
+
     // Clean up formatting
     content = cleanFieldContent(content);
 
@@ -1265,12 +1272,32 @@ function smartJoinLines(text: string): string {
 }
 
 /**
+ * Repair PDF ligature splitting.
+ *
+ * pdf-parse renders typographic ligatures (ff, fi, fl) as separate characters
+ * with an inserted space, e.g. "o ffering" → "offering", "bene fits" → "benefits".
+ */
+function repairLigatures(text: string): string {
+  let result = text;
+  // ff ligature: "o ffering" → "offering", "a ffiliate" → "affiliate"
+  result = result.replace(/([a-zA-Z]) (ff[a-z])/g, '$1$2');
+  // fi ligature: "bene fits" → "benefits", "speci fic" → "specific"
+  result = result.replace(/([a-zA-Z]) (fi[a-z])/g, '$1$2');
+  // fl ligature: "a fflicted" → "afflicted", "in flation" → "inflation"
+  result = result.replace(/([a-zA-Z]) (fl[a-z])/g, '$1$2');
+  return result;
+}
+
+/**
  * Clean field content - remove excess whitespace, normalize formatting
  */
 function cleanFieldContent(content: string): string {
   // Strip PDF placeholder text before any other processing
   let cleaned = stripPlaceholderText(content);
   if (!cleaned) return '';
+
+  // Repair PDF ligature splitting before line joining
+  cleaned = repairLigatures(cleaned);
 
   // Apply smart line joining to handle PDF text wrapping
   cleaned = smartJoinLines(cleaned);
@@ -1284,6 +1311,13 @@ function cleanFieldContent(content: string): string {
     .map(line => line.trim())
     .join('\n')
     .trim();
+
+  // Strip MiCA section headers that bleed from adjacent sections
+  // e.g., content ending with "\n\nPart D:\nInformation about the crypto-asset project"
+  // After smartJoinLines, the paragraph break may have collapsed to a space or \n
+  cleaned = cleaned.replace(/[\n ]+Part\s+[A-J]:\s*\n[A-Z][^\n]+$/, '');
+  // Also handle fully joined case (single line): "...secure. Part D: Information about..."
+  cleaned = cleaned.replace(/\s+Part\s+[A-J]:\s+[A-Z][A-Za-z ]+$/, '');
 
   // Strip trailing periods from single-line values (not multi-line prose)
   if (!cleaned.includes('\n')) {
