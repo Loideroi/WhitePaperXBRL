@@ -221,7 +221,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
     );
   } catch (error) {
-    console.error('Upload/process error:', error);
+    console.error('Upload/process error:', error instanceof Error ? error.message : 'Unknown error');
     return NextResponse.json(
       {
         success: false,

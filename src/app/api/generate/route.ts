@@ -156,7 +156,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    console.error('Generate error:', error);
+    console.error('Generate error:', error instanceof Error ? error.message : 'Unknown error');
     return NextResponse.json(
       {
         success: false,
