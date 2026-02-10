@@ -587,5 +587,69 @@ describe('mapPdfToWhitepaper', () => {
         expect(rawE2).not.toMatch(/^E\.2\s/);
       }
     });
+
+    it('should strip field label when it exactly matches the definition', () => {
+      // S.3 label is "Name of crypto-asset" — content starts with label text
+      const extraction = createExtractionResult([
+        ['partS', 'S.3    Name of crypto-asset$SPURS'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      const rawS3 = result.data.rawFields?.['S.3'];
+      expect(rawS3).toBeDefined();
+      if (rawS3) {
+        expect(rawS3).not.toContain('Name of crypto-asset');
+        expect(rawS3).toContain('$SPURS');
+      }
+    });
+
+    it('should strip field label with newlines inside the label text', () => {
+      // A.7 label is "Another identifier required pursuant to applicable national law"
+      // pdf-parse may break it across lines
+      const extraction = createExtractionResult([
+        ['partA', 'A.7    Another identifier required\npursuant to applicable national lawBusiness ID: CHE-219.335.797'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      const rawA7 = result.data.rawFields?.['A.7'];
+      expect(rawA7).toBeDefined();
+      if (rawA7) {
+        expect(rawA7).not.toContain('Another identifier');
+        expect(rawA7).toContain('CHE-219.335.797');
+      }
+    });
+
+    it('should strip field label with extra spaces from PDF extraction', () => {
+      // F.12 label is "Language or languages of white paper"
+      // pdf-parse may insert extra spaces
+      const extraction = createExtractionResult([
+        ['partF', 'F.12    Language  or  languages  of  white  paperEnglish'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      const rawF12 = result.data.rawFields?.['F.12'];
+      expect(rawF12).toBeDefined();
+      if (rawF12) {
+        expect(rawF12).not.toContain('Language');
+        expect(rawF12).toContain('English');
+      }
+    });
+
+    it('should not alter content when label is not present', () => {
+      const extraction = createExtractionResult([
+        ['partS', 'S.3    $SPURS'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      const rawS3 = result.data.rawFields?.['S.3'];
+      expect(rawS3).toBeDefined();
+      if (rawS3) {
+        expect(rawS3).toContain('$SPURS');
+      }
+    });
   });
 });

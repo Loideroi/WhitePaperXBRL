@@ -1203,15 +1203,18 @@ function removeFieldLabelFromContent(content: string, fieldNum: string): string 
   const fieldDef = OTHR_FIELD_DEFINITIONS.find(f => f.number === fieldNum);
   if (!fieldDef) return content;
 
-  // Try to remove the label if it appears at the start
+  // Build flexible regex: replace spaces in label with \s+ to handle
+  // newlines, extra spaces, non-breaking spaces within PDF-extracted label text
   const label = fieldDef.label;
-  const labelPattern = new RegExp(`^${escapeRegexSpecialChars(label)}\\s*`, 'i');
+  const flexibleLabel = escapeRegexSpecialChars(label).replace(/ /g, '\\s+');
+  const labelPattern = new RegExp(`^${flexibleLabel}\\s*`, 'i');
   const withoutLabel = content.replace(labelPattern, '').trim();
 
-  // Also try common variations
+  // Also try without parenthetical text
   const shortLabel = label.replace(/\s*\([^)]+\)\s*/g, '').trim();
   if (shortLabel !== label) {
-    const shortLabelPattern = new RegExp(`^${escapeRegexSpecialChars(shortLabel)}\\s*`, 'i');
+    const flexibleShort = escapeRegexSpecialChars(shortLabel).replace(/ /g, '\\s+');
+    const shortLabelPattern = new RegExp(`^${flexibleShort}\\s*`, 'i');
     const withoutShortLabel = content.replace(shortLabelPattern, '').trim();
     if (withoutShortLabel.length < content.length) {
       return withoutShortLabel;
