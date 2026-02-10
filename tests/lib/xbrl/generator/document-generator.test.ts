@@ -47,6 +47,58 @@ function makeMinimalData(overrides?: Partial<WhitepaperData>): Partial<Whitepape
   };
 }
 
+describe('document-generator xml:lang support', () => {
+  it('should set xml:lang on root html element with default "en"', () => {
+    const data = makeMinimalData({ language: undefined });
+    const html = generateIXBRLDocument(data);
+
+    expect(html).toMatch(/xml:lang="en"/);
+  });
+
+  it('should set xml:lang on root html element with specified language', () => {
+    const data = makeMinimalData({ language: 'de' });
+    const html = generateIXBRLDocument(data);
+
+    expect(html).toMatch(/<html[^>]*xml:lang="de"/);
+  });
+
+  it('should set xml:lang on ix:references element with default "en"', () => {
+    const data = makeMinimalData({ language: undefined });
+    const html = generateIXBRLDocument(data);
+
+    expect(html).toMatch(/<ix:references\s+xml:lang="en">/);
+  });
+
+  it('should set xml:lang on ix:references element with specified language', () => {
+    const data = makeMinimalData({ language: 'fr' });
+    const html = generateIXBRLDocument(data);
+
+    expect(html).toMatch(/<ix:references\s+xml:lang="fr">/);
+  });
+
+  it('should have matching xml:lang on both root html and ix:references', () => {
+    const data = makeMinimalData({ language: 'nl' });
+    const html = generateIXBRLDocument(data);
+
+    expect(html).toMatch(/<html[^>]*xml:lang="nl"/);
+    expect(html).toMatch(/<ix:references\s+xml:lang="nl">/);
+  });
+
+  it('should set language property on IXBRLDocument object', () => {
+    const data = makeMinimalData({ language: 'es' });
+    const doc = createIXBRLDocument(data);
+
+    expect(doc.language).toBe('es');
+  });
+
+  it('should default language to "en" on IXBRLDocument object', () => {
+    const data = makeMinimalData({ language: undefined });
+    const doc = createIXBRLDocument(data);
+
+    expect(doc.language).toBe('en');
+  });
+});
+
 describe('document-generator rawFields numeric handling', () => {
   describe('rawFields with numeric values', () => {
     it('should attach unitRef and decimals for integer rawFields', () => {

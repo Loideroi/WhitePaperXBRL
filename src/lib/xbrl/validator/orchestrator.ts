@@ -11,6 +11,8 @@ import type { WhitepaperData } from '@/types/whitepaper';
 import { validateLEI, validateAllLEIs } from './lei-validator';
 import { validateExistenceAssertions, getAssertionSummary } from './existence-engine';
 import { validateValueAssertions, getValueAssertionSummary } from './value-engine';
+import { detectDuplicateFacts, duplicateResultToValidationErrors } from './duplicate-detector';
+import { createIXBRLDocument } from '../generator/document-generator';
 
 /**
  * Validation options
@@ -33,12 +35,14 @@ export interface DetailedValidationResult extends ValidationResult {
     lei: { errors: ValidationError[]; warnings: ValidationError[] };
     existence: { errors: ValidationError[]; warnings: ValidationError[] };
     value: { errors: ValidationError[]; warnings: ValidationError[] };
+    duplicate: { errors: ValidationError[]; warnings: ValidationError[] };
   };
   /** Assertion counts */
   assertionCounts: {
     existence: { total: number; passed: number; failed: number };
     value: { total: number; passed: number; failed: number };
     lei: { total: number; passed: number; failed: number };
+    duplicate: { total: number; passed: number; failed: number };
   };
 }
 
@@ -70,6 +74,7 @@ export async function validateWhitepaper(
     lei: { errors: [] as ValidationError[], warnings: [] as ValidationError[] },
     existence: { errors: [] as ValidationError[], warnings: [] as ValidationError[] },
     value: { errors: [] as ValidationError[], warnings: [] as ValidationError[] },
+    duplicate: { errors: [] as ValidationError[], warnings: [] as ValidationError[] },
   };
 
   // 1. LEI Validation
@@ -123,21 +128,46 @@ export async function validateWhitepaper(
     ...filterBySkipRules(valueResult.warnings, options.skipRules)
   );
 
+  // 4. Duplicate Fact Detection
+  // Generate the iXBRL document to get the facts, then check for duplicates
+  const ixbrlDoc = createIXBRLDocument(data);
+  const factsForDuplicateCheck = ixbrlDoc.facts.map((f) => ({
+    name: f.name,
+    contextRef: f.contextRef,
+    value: String(f.value),
+    unitRef: f.unitRef,
+  }));
+  const duplicateResult = detectDuplicateFacts(factsForDuplicateCheck);
+  const duplicateErrors = duplicateResultToValidationErrors(duplicateResult);
+  const filteredDuplicateErrors = filterBySkipRules(duplicateErrors, options.skipRules);
+  byCategory.duplicate.errors.push(
+    ...filteredDuplicateErrors.filter((e) => e.severity === 'ERROR')
+  );
+  byCategory.duplicate.warnings.push(
+    ...filteredDuplicateErrors.filter((e) => e.severity === 'WARNING')
+  );
+
   // Aggregate all errors and warnings
   allErrors.push(
     ...byCategory.lei.errors,
     ...byCategory.existence.errors,
-    ...byCategory.value.errors
+    ...byCategory.value.errors,
+    ...byCategory.duplicate.errors
   );
   allWarnings.push(
     ...byCategory.lei.warnings,
     ...byCategory.existence.warnings,
-    ...byCategory.value.warnings
+    ...byCategory.value.warnings,
+    ...byCategory.duplicate.warnings
   );
 
   // Calculate assertion counts
   const existenceSummary = getAssertionSummary(tokenType);
   const valueSummary = getValueAssertionSummary(tokenType);
+
+  // Duplicate detection counts as 1 assertion (pass or fail)
+  const duplicateAssertionTotal = 1;
+  const duplicateAssertionFailed = byCategory.duplicate.errors.length > 0 ? 1 : 0;
 
   const assertionCounts = {
     existence: {
@@ -155,6 +185,11 @@ export async function validateWhitepaper(
       passed: 6 - byCategory.lei.errors.length,
       failed: byCategory.lei.errors.length,
     },
+    duplicate: {
+      total: duplicateAssertionTotal,
+      passed: duplicateAssertionTotal - duplicateAssertionFailed,
+      failed: duplicateAssertionFailed,
+    },
   };
 
   return {
@@ -165,11 +200,13 @@ export async function validateWhitepaper(
       totalAssertions:
         assertionCounts.existence.total +
         assertionCounts.value.total +
-        assertionCounts.lei.total,
+        assertionCounts.lei.total +
+        assertionCounts.duplicate.total,
       passed:
         assertionCounts.existence.passed +
         assertionCounts.value.passed +
-        assertionCounts.lei.passed,
+        assertionCounts.lei.passed +
+        assertionCounts.duplicate.passed,
       errors: allErrors.length,
       warnings: allWarnings.length,
     },
@@ -240,6 +277,6 @@ export function getValidationRequirements(tokenType: TokenType): {
   return {
     existence,
     value,
-    total: existence.total + value.total + 6, // +6 for LEI checks
+    total: existence.total + value.total + 6 + 1, // +6 for LEI checks, +1 for duplicate detection
   };
 }

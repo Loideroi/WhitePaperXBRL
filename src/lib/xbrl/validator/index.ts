@@ -28,6 +28,17 @@ export {
 } from './value-engine';
 export type { ValueAssertion } from './value-engine';
 
+// Duplicate Detector
+export {
+  detectDuplicateFacts,
+  duplicateResultToValidationErrors,
+} from './duplicate-detector';
+export type {
+  FactInput,
+  DuplicateGroup,
+  DuplicateFactResult,
+} from './duplicate-detector';
+
 // Orchestrator
 export {
   validateWhitepaper,

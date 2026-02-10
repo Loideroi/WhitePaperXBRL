@@ -35,6 +35,7 @@ import {
   getEnumerationUri,
   getEnumerationLabel,
 } from './mica-template/enumeration-mappings';
+import { detectDuplicateFacts, type DuplicateFactResult } from '../validator/duplicate-detector';
 
 /**
  * XBRL Namespaces for the document root element
@@ -106,6 +107,13 @@ function tryExtractNumericValue(text: string, dataType: XBRLDataType): string {
 /**
  * Map whitepaper data to fact values for each field definition.
  * Returns a Map keyed by xbrlElement name.
+ *
+ * Note: Duplicates are inherently prevented for non-dimensional facts because
+ * `values` is a Map keyed by `xbrlElement`. The `values.set()` call overwrites
+ * any prior entry for the same element, and the rawFields loop explicitly checks
+ * `values.has(fieldDef.xbrlElement)` before setting to avoid overwriting typed
+ * extractions. For additional safety, the duplicate detector
+ * (`detectDuplicateFacts`) is run post-generation to catch any edge cases.
  */
 function mapDataToFactValues(
   data: Partial<WhitepaperData>,
@@ -615,7 +623,7 @@ ${sectionPages.join('\n')}
   <div style="display:none">
     <ix:header>
 ${hiddenBlockXml}
-      <ix:references>
+      <ix:references xml:lang="${data.language || 'en'}">
         <link:schemaRef xlink:href="${TAXONOMY_REF}" xlink:type="simple" />
       </ix:references>
       <ix:resources>
@@ -632,9 +640,15 @@ ${unitsXml}
 }
 
 /**
- * Create an IXBRLDocument object (for programmatic use)
+ * Create an IXBRLDocument object (for programmatic use).
+ *
+ * After building facts, runs duplicate detection and logs warnings if any
+ * duplicate facts are found. The duplicate result is also attached to the
+ * returned document for downstream consumers.
  */
-export function createIXBRLDocument(data: Partial<WhitepaperData>): IXBRLDocument {
+export function createIXBRLDocument(
+  data: Partial<WhitepaperData>
+): IXBRLDocument & { duplicateCheck?: DuplicateFactResult } {
   const contexts = buildAllContexts(data);
   const durationCtxId = getContextId('duration');
   const instantCtxId = getContextId('instant');
@@ -651,6 +665,27 @@ export function createIXBRLDocument(data: Partial<WhitepaperData>): IXBRLDocumen
     humanReadableValue: fv.humanReadable,
   }));
 
+  // Run duplicate fact detection as a post-generation safety check
+  const duplicateCheck = detectDuplicateFacts(
+    facts.map((f) => ({
+      name: f.name,
+      contextRef: f.contextRef,
+      value: String(f.value),
+      unitRef: f.unitRef,
+    }))
+  );
+
+  if (duplicateCheck.hasDuplicates) {
+    console.warn(
+      `[iXBRL Generator] Duplicate facts detected: ${duplicateCheck.duplicates.length} duplicate group(s) found across ${duplicateCheck.totalFacts} facts.`
+    );
+    for (const dup of duplicateCheck.duplicates) {
+      console.warn(
+        `  - "${dup.elementName}" (context: ${dup.contextRef}${dup.unitRef ? `, unit: ${dup.unitRef}` : ''}) appears ${dup.count} times`
+      );
+    }
+  }
+
   const units = getUsedUnits(factValues);
 
   return {
@@ -659,5 +694,6 @@ export function createIXBRLDocument(data: Partial<WhitepaperData>): IXBRLDocumen
     facts,
     language: data.language || 'en',
     taxonomyRef: TAXONOMY_REF,
+    duplicateCheck,
   };
 }
