@@ -87,7 +87,7 @@ Detection works in two passes:
 
 ### Step 3: Field Mapping (Three-Pass Strategy)
 
-The field mapping engine in `src/lib/pdf/field-mapper.ts` (1487 lines) uses three passes to maximize extraction coverage.
+The field mapping engine in `src/lib/pdf/field-mapper.ts` (~1600 lines) uses three passes to maximize extraction coverage.
 
 ---
 
@@ -104,15 +104,17 @@ The `extractAllRawFields()` function performs a comprehensive scan:
 3. Extracts content between consecutive field markers (content of field N ends where field N+1 begins)
 4. Expands range fields (e.g., `B.2-B12` populates `B.2` through `B.12`)
 5. Removes field labels from the start of content using `OTHR_FIELD_DEFINITIONS`
-6. Applies `smartJoinLines()` and `cleanFieldContent()` for proper formatting
+6. Strips "No Field Content" placeholder text via `stripPlaceholderText()`
+7. Strips trailing periods from single-line values
+8. Applies `smartJoinLines()` and `cleanFieldContent()` for proper formatting
 
 For typed fields, `mapPdfToWhitepaper()` iterates over `MICA_SECTION_MAPPINGS` and uses:
-- `extractTableContent()` -- For single-line fields
-- `extractMultiLineTableContent()` -- For fields with paragraph content
+- `extractTableContent()` -- For single-line fields (filters "No Field Content" and "Field Content" artifacts)
+- `extractMultiLineTableContent()` -- For fields with paragraph content (strips placeholders post-extraction)
 
-### Pass 2: Pattern-Based Fallback
+### Pass 2: Pattern-Based Fallback (Section-Scoped)
 
-For fields not found in Pass 1, the engine searches the full text using regex patterns defined in `MICA_SECTION_MAPPINGS` (60+ mapping rules). Each mapping rule specifies:
+For fields not found in Pass 1, the engine searches section-specific text first (via `extraction.sections.get()`) before falling back to full document text. This scoping prevents cross-field content bleed (e.g., H.1 patterns matching Part A text). The engine uses regex patterns defined in `MICA_SECTION_MAPPINGS` (60+ mapping rules). Each mapping rule specifies:
 
 ```typescript
 interface MiCASectionMapping {
@@ -127,10 +129,12 @@ interface MiCASectionMapping {
 ```
 
 When a pattern matches, the engine:
-1. Extracts content after the match point
-2. For single-line: captures until next numbered item or newline
-3. For multi-line: captures until next section marker or 2000 character limit
-4. Applies the confidence multiplier of 0.7 (see Confidence Scoring below)
+1. Searches section-specific text first (e.g., `partH` section for Part H fields), then full text if not found
+2. Extracts content after the match point
+3. For single-line: captures until next numbered item or newline
+4. For multi-line: captures until next section marker or 2000 character limit
+5. Strips "No Field Content" placeholder text
+6. Applies the confidence multiplier of 0.7 (see Confidence Scoring below)
 
 ### Pass 3: Label Matching from OTHR_FIELD_DEFINITIONS
 
@@ -179,6 +183,8 @@ The field mapper applies specialized transform functions to extract structured v
 | `cleanCryptoAssetName` | Strips "Crypto-asset name" prefix and "project" suffix |
 | `cleanTickerSymbol` | Extracts `$SYMBOL` pattern or first uppercase token, removes `$` prefix |
 | `cleanTextContent` | Joins broken lines, collapses whitespace |
+| `cleanFieldContent` | Strips "No Field Content" placeholders, applies `smartJoinLines()`, strips trailing periods from single-line values |
+| `stripPlaceholderText` | Removes "No Field Content" placeholder text (standalone, at end of text, mid-text between sentences, or as full value) |
 
 ### Value Extraction
 
@@ -191,14 +197,17 @@ The field mapper applies specialized transform functions to extract structured v
 | `extractMaxSubscriptionGoal` | Parses monetary amounts | `"25,000 USD"` | `25000` |
 | `extractEnergyConsumption` | Extracts kWh values | `"86.68 kWh"` | `86.68` |
 | `extractRenewableEnergy` | Extracts percentage or detects N/A | `"45.2%"` | `45.2` |
-| `extractDateValue` | Parses dates to ISO format | `"December 17, 2025"` | `"2025-12-17"` |
+| `extractDateValue` | Parses dates to ISO format (ISO, DD/MM/YYYY, named months), strips trailing punctuation | `"04/10/2023"` or `"December 17, 2025."` | `"2023-10-04"` or `"2025-12-17"` |
 
 ### Entity Extraction
 
 | Function | Purpose |
 |----------|---------|
 | `extractLEIValue` | Handles standard LEI (20 chars), Swiss UID (`CHE-XXX.XXX.XXX`), and "Not applicable" |
-| `extractCountryCode` | Maps country names/cities to ISO 2-letter codes (25+ countries) |
+| `extractCountryCode` | Maps country names/cities to ISO 2-letter codes via shared `countryNameToCode()` lookup (25+ countries) |
+| `extractCountryFromAddress` | Extracts country from last comma-separated component of address (e.g., `"Gubelstrasse 11, 6300 Zug, Switzerland"` → `"CH"`), falls back to `extractCountryCode` |
+| `extractSubdivisionFromAddress` | Extracts city/region from second-to-last address component, strips postal codes (e.g., `"6300 Zug"` → `"Zug"`) |
+| `countryNameToCode` | Shared lookup converting 25+ country names/adjectives/cities to ISO 2-letter codes |
 | `extractUrl` | Extracts `https://` URLs or constructs from domain patterns |
 | `extractEmail` | Extracts email addresses via standard regex |
 
@@ -257,6 +266,18 @@ After field mapping, `mapPdfToWhitepaper()` applies additional logic:
 2. **Consensus mechanism reuse**: Copies `partD.consensusMechanism` to `partJ.consensusMechanismType` if the latter was not independently extracted.
 3. **Default values**: Sets `language` to `"en"` and `documentDate` to the current date.
 4. **Raw fields population**: Calls `extractAllRawFields()` to populate `rawFields` with all numbered field content for use by the iXBRL generator as fallback content.
+
+### Numeric Value Extraction (in document-generator.ts)
+
+When raw fields are used to populate iXBRL facts, `tryExtractNumericValue()` applies smart extraction for numeric data types (`monetaryItemType`, `decimalItemType`, `integerItemType`, `percentItemType`):
+
+1. Returns empty for "not applicable" / "n/a" / "none" / "nil" text
+2. Prefers numbers adjacent to currency symbols (`EUR 1,500.00`) or units (`25.55 kWh`, `81%`)
+3. Strips date patterns (`2023-10-04`, `04/10/2023`) and time patterns (`11:00 CET`) before scanning
+4. Skips year-like numbers (1900-2099) to avoid extracting dates as amounts
+5. Returns empty string (not wrong text) when no valid number is found
+
+Additionally, `setValueIfPresent()` applies `.trim()` to all values to prevent whitespace artifacts in fact values.
 
 ---
 

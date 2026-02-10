@@ -8,7 +8,7 @@ This document outlines the testing strategy for the WhitePaper XBRL platform, in
 
 ## Current Test Status
 
-### Existing Test Files (18 unit + 1 E2E)
+### Existing Test Files (18 unit + 1 E2E = 402 unit + 32 E2E)
 
 | File | Category | Description |
 |------|----------|-------------|
