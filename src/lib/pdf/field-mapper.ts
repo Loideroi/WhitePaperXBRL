@@ -105,9 +105,9 @@ const MICA_SECTION_MAPPINGS: MiCASectionMapping[] = [
     confidence: 'high',
   },
   {
-    sectionNumbers: ['A.6', 'A.7'],
-    fieldNames: ['Legal entity identifier', 'Another identifier', 'LEI', 'Business ID'],
-    patterns: [/\bLEI\b|legal\s*entity\s*identifier|business\s*id/i],
+    sectionNumbers: ['A.6'],
+    fieldNames: ['Legal entity identifier', 'LEI'],
+    patterns: [/\bLEI\b|legal\s*entity\s*identifier/i],
     targetPath: 'partA.lei',
     transform: extractLEIValue,
     confidence: 'high',
@@ -386,8 +386,8 @@ function cleanTextContent(text: string): string {
     .replace(/\s{2,}/g, ' ')
     .trim();
   // Strip MiCA section headers that bleed from adjacent sections
-  cleaned = cleaned.replace(/[\n ]+Part\s+[A-J]:\s*\n[A-Z][^\n]+$/, '');
-  cleaned = cleaned.replace(/\s+Part\s+[A-J]:\s+[A-Z][A-Za-z ]+$/, '');
+  cleaned = cleaned.replace(/[\n ]+Part\s+[A-JS]:\s*\n[A-Z][^\n]+$/, '');
+  cleaned = cleaned.replace(/\s+Part\s+[A-JS]:\s+[A-Z][A-Za-z ]+$/, '');
   return cleaned;
 }
 
@@ -1322,9 +1322,9 @@ function cleanFieldContent(content: string): string {
   // Strip MiCA section headers that bleed from adjacent sections
   // e.g., content ending with "\n\nPart D:\nInformation about the crypto-asset project"
   // After smartJoinLines, the paragraph break may have collapsed to a space or \n
-  cleaned = cleaned.replace(/[\n ]+Part\s+[A-J]:\s*\n[A-Z][^\n]+$/, '');
+  cleaned = cleaned.replace(/[\n ]+Part\s+[A-JS]:\s*\n[A-Z][^\n]+$/, '');
   // Also handle fully joined case (single line): "...secure. Part D: Information about..."
-  cleaned = cleaned.replace(/\s+Part\s+[A-J]:\s+[A-Z][A-Za-z ]+$/, '');
+  cleaned = cleaned.replace(/\s+Part\s+[A-JS]:\s+[A-Z][A-Za-z ]+$/, '');
 
   // Strip trailing periods from single-line values (not multi-line prose)
   if (!cleaned.includes('\n')) {
