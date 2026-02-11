@@ -107,7 +107,72 @@ export const SUBMISSION_TYPE_ENUM: Record<string, EnumerationMapping> = {
 };
 
 /**
- * Home member state (F.18) - EU member states
+ * ISO 3166-1 alpha-2 countries — used for registered/head office country fields
+ * where the entity may be domiciled outside the EU (e.g., Swiss offerors filing under MiCA).
+ */
+export const COUNTRY_ENUM: Record<string, EnumerationMapping> = {
+  // EU member states
+  AT: { humanReadable: 'Austria', taxonomyUri: `${TAXONOMY_BASE}#AT` },
+  BE: { humanReadable: 'Belgium', taxonomyUri: `${TAXONOMY_BASE}#BE` },
+  BG: { humanReadable: 'Bulgaria', taxonomyUri: `${TAXONOMY_BASE}#BG` },
+  HR: { humanReadable: 'Croatia', taxonomyUri: `${TAXONOMY_BASE}#HR` },
+  CY: { humanReadable: 'Cyprus', taxonomyUri: `${TAXONOMY_BASE}#CY` },
+  CZ: { humanReadable: 'Czechia', taxonomyUri: `${TAXONOMY_BASE}#CZ` },
+  DK: { humanReadable: 'Denmark', taxonomyUri: `${TAXONOMY_BASE}#DK` },
+  EE: { humanReadable: 'Estonia', taxonomyUri: `${TAXONOMY_BASE}#EE` },
+  FI: { humanReadable: 'Finland', taxonomyUri: `${TAXONOMY_BASE}#FI` },
+  FR: { humanReadable: 'France', taxonomyUri: `${TAXONOMY_BASE}#FR` },
+  DE: { humanReadable: 'Germany', taxonomyUri: `${TAXONOMY_BASE}#DE` },
+  GR: { humanReadable: 'Greece', taxonomyUri: `${TAXONOMY_BASE}#GR` },
+  HU: { humanReadable: 'Hungary', taxonomyUri: `${TAXONOMY_BASE}#HU` },
+  IE: { humanReadable: 'Ireland', taxonomyUri: `${TAXONOMY_BASE}#IE` },
+  IT: { humanReadable: 'Italy', taxonomyUri: `${TAXONOMY_BASE}#IT` },
+  LV: { humanReadable: 'Latvia', taxonomyUri: `${TAXONOMY_BASE}#LV` },
+  LT: { humanReadable: 'Lithuania', taxonomyUri: `${TAXONOMY_BASE}#LT` },
+  LU: { humanReadable: 'Luxembourg', taxonomyUri: `${TAXONOMY_BASE}#LU` },
+  MT: { humanReadable: 'Malta', taxonomyUri: `${TAXONOMY_BASE}#MT` },
+  NL: { humanReadable: 'Netherlands', taxonomyUri: `${TAXONOMY_BASE}#NL` },
+  PL: { humanReadable: 'Poland', taxonomyUri: `${TAXONOMY_BASE}#PL` },
+  PT: { humanReadable: 'Portugal', taxonomyUri: `${TAXONOMY_BASE}#PT` },
+  RO: { humanReadable: 'Romania', taxonomyUri: `${TAXONOMY_BASE}#RO` },
+  SK: { humanReadable: 'Slovakia', taxonomyUri: `${TAXONOMY_BASE}#SK` },
+  SI: { humanReadable: 'Slovenia', taxonomyUri: `${TAXONOMY_BASE}#SI` },
+  ES: { humanReadable: 'Spain', taxonomyUri: `${TAXONOMY_BASE}#ES` },
+  SE: { humanReadable: 'Sweden', taxonomyUri: `${TAXONOMY_BASE}#SE` },
+  // EEA / EFTA
+  IS: { humanReadable: 'Iceland', taxonomyUri: `${TAXONOMY_BASE}#IS` },
+  LI: { humanReadable: 'Liechtenstein', taxonomyUri: `${TAXONOMY_BASE}#LI` },
+  NO: { humanReadable: 'Norway', taxonomyUri: `${TAXONOMY_BASE}#NO` },
+  CH: { humanReadable: 'Switzerland', taxonomyUri: `${TAXONOMY_BASE}#CH` },
+  // Other common jurisdictions
+  GB: { humanReadable: 'United Kingdom', taxonomyUri: `${TAXONOMY_BASE}#GB` },
+  US: { humanReadable: 'United States', taxonomyUri: `${TAXONOMY_BASE}#US` },
+  CA: { humanReadable: 'Canada', taxonomyUri: `${TAXONOMY_BASE}#CA` },
+  AU: { humanReadable: 'Australia', taxonomyUri: `${TAXONOMY_BASE}#AU` },
+  JP: { humanReadable: 'Japan', taxonomyUri: `${TAXONOMY_BASE}#JP` },
+  SG: { humanReadable: 'Singapore', taxonomyUri: `${TAXONOMY_BASE}#SG` },
+  HK: { humanReadable: 'Hong Kong', taxonomyUri: `${TAXONOMY_BASE}#HK` },
+  KR: { humanReadable: 'South Korea', taxonomyUri: `${TAXONOMY_BASE}#KR` },
+  AE: { humanReadable: 'United Arab Emirates', taxonomyUri: `${TAXONOMY_BASE}#AE` },
+  BH: { humanReadable: 'Bahrain', taxonomyUri: `${TAXONOMY_BASE}#BH` },
+  BR: { humanReadable: 'Brazil', taxonomyUri: `${TAXONOMY_BASE}#BR` },
+  KY: { humanReadable: 'Cayman Islands', taxonomyUri: `${TAXONOMY_BASE}#KY` },
+  CN: { humanReadable: 'China', taxonomyUri: `${TAXONOMY_BASE}#CN` },
+  GI: { humanReadable: 'Gibraltar', taxonomyUri: `${TAXONOMY_BASE}#GI` },
+  IN: { humanReadable: 'India', taxonomyUri: `${TAXONOMY_BASE}#IN` },
+  ID: { humanReadable: 'Indonesia', taxonomyUri: `${TAXONOMY_BASE}#ID` },
+  IL: { humanReadable: 'Israel', taxonomyUri: `${TAXONOMY_BASE}#IL` },
+  MX: { humanReadable: 'Mexico', taxonomyUri: `${TAXONOMY_BASE}#MX` },
+  NZ: { humanReadable: 'New Zealand', taxonomyUri: `${TAXONOMY_BASE}#NZ` },
+  PA: { humanReadable: 'Panama', taxonomyUri: `${TAXONOMY_BASE}#PA` },
+  TH: { humanReadable: 'Thailand', taxonomyUri: `${TAXONOMY_BASE}#TH` },
+  TR: { humanReadable: 'Turkey', taxonomyUri: `${TAXONOMY_BASE}#TR` },
+  VG: { humanReadable: 'British Virgin Islands', taxonomyUri: `${TAXONOMY_BASE}#VG` },
+  ZA: { humanReadable: 'South Africa', taxonomyUri: `${TAXONOMY_BASE}#ZA` },
+};
+
+/**
+ * Home member state (F.18) - EU member states only
  */
 export const MEMBER_STATE_ENUM: Record<string, EnumerationMapping> = {
   AT: { humanReadable: 'Austria', taxonomyUri: `${TAXONOMY_BASE}#AT` },
@@ -183,15 +248,15 @@ export const ENUMERATION_MAPPINGS: Record<string, Record<string, EnumerationMapp
   'mica:OtherTokenTypeOfSubmission': SUBMISSION_TYPE_ENUM,
   'mica:OtherTokenHomeMemberState': MEMBER_STATE_ENUM,
   'mica:OtherTokenHostMemberStates': MEMBER_STATE_ENUM,
-  'mica:OfferorsRegisteredCountry': MEMBER_STATE_ENUM,
-  'mica:OfferorsHeadOfficeCountry': MEMBER_STATE_ENUM,
-  'mica:IssuersRegisteredCountry': MEMBER_STATE_ENUM,
-  'mica:IssuersHeadOfficeCountry': MEMBER_STATE_ENUM,
-  'mica:OperatorsRegisteredCountry': MEMBER_STATE_ENUM,
-  'mica:OperatorsHeadOfficeCountry': MEMBER_STATE_ENUM,
+  'mica:OfferorsRegisteredCountry': COUNTRY_ENUM,
+  'mica:OfferorsHeadOfficeCountry': COUNTRY_ENUM,
+  'mica:IssuersRegisteredCountry': COUNTRY_ENUM,
+  'mica:IssuersHeadOfficeCountry': COUNTRY_ENUM,
+  'mica:OperatorsRegisteredCountry': COUNTRY_ENUM,
+  'mica:OperatorsHeadOfficeCountry': COUNTRY_ENUM,
   'mica:TypeOfPersonInvolvedInImplementationOfOtherToken': PERSON_TYPE_ENUM,
   'mica:CompetentAuthorityForCreditInstitutions': COMPETENT_AUTHORITY_ENUM,
-  'mica:DomicileOfCompanyOfPersonInvolvedInImplementationOfOtherToken': MEMBER_STATE_ENUM,
+  'mica:DomicileOfCompanyOfPersonInvolvedInImplementationOfOtherToken': COUNTRY_ENUM,
   'mica:RedemptionCurrency': CURRENCY_ENUM,
 };
 

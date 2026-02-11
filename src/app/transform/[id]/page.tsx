@@ -41,6 +41,29 @@ interface SectionConfig {
 }
 
 // Enumeration option maps for dropdown fields
+
+// Full ISO 3166-1 country list for registered/head office country fields.
+// MiCA filings may come from entities domiciled outside the EU (e.g. Switzerland).
+const COUNTRY_OPTIONS: Record<string, string> = {
+  // EU member states
+  AT: 'Austria', BE: 'Belgium', BG: 'Bulgaria', HR: 'Croatia', CY: 'Cyprus',
+  CZ: 'Czechia', DK: 'Denmark', EE: 'Estonia', FI: 'Finland', FR: 'France',
+  DE: 'Germany', GR: 'Greece', HU: 'Hungary', IE: 'Ireland', IT: 'Italy',
+  LV: 'Latvia', LT: 'Lithuania', LU: 'Luxembourg', MT: 'Malta', NL: 'Netherlands',
+  PL: 'Poland', PT: 'Portugal', RO: 'Romania', SK: 'Slovakia', SI: 'Slovenia',
+  ES: 'Spain', SE: 'Sweden',
+  // EEA / EFTA
+  IS: 'Iceland', LI: 'Liechtenstein', NO: 'Norway', CH: 'Switzerland',
+  // Other common jurisdictions
+  GB: 'United Kingdom', US: 'United States', CA: 'Canada', AU: 'Australia',
+  JP: 'Japan', SG: 'Singapore', HK: 'Hong Kong', KR: 'South Korea',
+  AE: 'United Arab Emirates', BH: 'Bahrain', BR: 'Brazil', KY: 'Cayman Islands',
+  CN: 'China', GI: 'Gibraltar', IN: 'India', ID: 'Indonesia', IL: 'Israel',
+  MX: 'Mexico', NZ: 'New Zealand', PA: 'Panama', TH: 'Thailand', TR: 'Turkey',
+  VG: 'British Virgin Islands', ZA: 'South Africa',
+};
+
+// EU member states only — used for Home/Host member state fields (F.18 etc.)
 const MEMBER_STATE_OPTIONS: Record<string, string> = {
   AT: 'Austria', BE: 'Belgium', BG: 'Bulgaria', HR: 'Croatia', CY: 'Cyprus',
   CZ: 'Czechia', DK: 'Denmark', EE: 'Estonia', FI: 'Finland', FR: 'France',
@@ -100,10 +123,10 @@ const SECTIONS: SectionConfig[] = [
       { path: 'partA.legalName', label: 'Legal Name (A.1)', type: 'text', required: true, placeholder: 'Enter company legal name' },
       { path: 'rawFields.A.2', label: 'Legal Form (A.2)', type: 'text', placeholder: 'e.g., Limited Liability Company' },
       { path: 'partA.registeredAddress', label: 'Registered Address (A.3)', type: 'textblock', required: true, placeholder: 'Full registered address' },
-      { path: 'partA.country', label: 'Registered Country (A.3c)', type: 'enumeration', required: true, options: MEMBER_STATE_OPTIONS, helpText: 'EU member state' },
+      { path: 'partA.country', label: 'Registered Country (A.3c)', type: 'enumeration', required: true, options: COUNTRY_OPTIONS, helpText: 'Country of registration (ISO 3166-1)' },
       { path: 'rawFields.A.3s', label: 'Country Subdivision (A.3s)', type: 'text', placeholder: 'Region/province' },
       { path: 'rawFields.A.4', label: 'Head Office (A.4)', type: 'text', placeholder: 'Head office address' },
-      { path: 'rawFields.A.4c', label: 'Head Office Country (A.4c)', type: 'enumeration', options: MEMBER_STATE_OPTIONS },
+      { path: 'rawFields.A.4c', label: 'Head Office Country (A.4c)', type: 'enumeration', options: COUNTRY_OPTIONS },
       { path: 'rawFields.A.5', label: 'Registration Date (A.5)', type: 'date' },
       { path: 'partA.lei', label: 'Legal Entity Identifier (A.6)', type: 'text', required: true, placeholder: '20-char LEI code', helpText: 'ISO 17442 compliant LEI', maxLength: 20 },
       { path: 'rawFields.A.7', label: 'Other National Identifier (A.7)', type: 'text', placeholder: 'National registration number' },
@@ -133,9 +156,9 @@ const SECTIONS: SectionConfig[] = [
       { path: 'partB.legalName', label: 'Issuer Name (B.2)', type: 'text', placeholder: 'Legal name of issuer' },
       { path: 'rawFields.B.3', label: 'Legal Form (B.3)', type: 'text', placeholder: 'Legal form of issuer' },
       { path: 'partB.registeredAddress', label: 'Registered Address (B.4)', type: 'text', placeholder: 'Issuer registered address' },
-      { path: 'rawFields.B.4c', label: 'Registered Country (B.4c)', type: 'enumeration', options: MEMBER_STATE_OPTIONS },
+      { path: 'rawFields.B.4c', label: 'Registered Country (B.4c)', type: 'enumeration', options: COUNTRY_OPTIONS },
       { path: 'rawFields.B.5', label: 'Head Office (B.5)', type: 'text', placeholder: 'Issuer head office' },
-      { path: 'rawFields.B.5c', label: 'Head Office Country (B.5c)', type: 'enumeration', options: MEMBER_STATE_OPTIONS },
+      { path: 'rawFields.B.5c', label: 'Head Office Country (B.5c)', type: 'enumeration', options: COUNTRY_OPTIONS },
       { path: 'rawFields.B.6', label: 'Registration Date (B.6)', type: 'date' },
       { path: 'partB.lei', label: 'Legal Entity Identifier (B.7)', type: 'text', placeholder: '20-char LEI', maxLength: 20 },
       { path: 'rawFields.B.8', label: 'Other National Identifier (B.8)', type: 'text' },
@@ -157,9 +180,9 @@ const SECTIONS: SectionConfig[] = [
       { path: 'partC.legalName', label: 'Operator Name (C.1)', type: 'text', placeholder: 'Legal name of operator' },
       { path: 'rawFields.C.2', label: 'Legal Form (C.2)', type: 'text' },
       { path: 'partC.registeredAddress', label: 'Registered Address (C.3)', type: 'text' },
-      { path: 'rawFields.C.3c', label: 'Registered Country (C.3c)', type: 'enumeration', options: MEMBER_STATE_OPTIONS },
+      { path: 'rawFields.C.3c', label: 'Registered Country (C.3c)', type: 'enumeration', options: COUNTRY_OPTIONS },
       { path: 'rawFields.C.4', label: 'Head Office (C.4)', type: 'text' },
-      { path: 'rawFields.C.4c', label: 'Head Office Country (C.4c)', type: 'enumeration', options: MEMBER_STATE_OPTIONS },
+      { path: 'rawFields.C.4c', label: 'Head Office Country (C.4c)', type: 'enumeration', options: COUNTRY_OPTIONS },
       { path: 'rawFields.C.5', label: 'Registration Date (C.5)', type: 'date' },
       { path: 'partC.lei', label: 'Legal Entity Identifier (C.6)', type: 'text', placeholder: '20-char LEI', maxLength: 20 },
       { path: 'rawFields.C.7', label: 'Other National Identifier (C.7)', type: 'text' },
