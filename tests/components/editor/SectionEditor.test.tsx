@@ -56,3 +56,49 @@ describe('SectionEditor boolean coercion', () => {
     expect(noBtn.className).toContain('bg-primary');
   });
 });
+
+describe('SectionEditor currency passthrough', () => {
+  it('resolves currency from currencyPath and passes it to MonetaryField', () => {
+    render(
+      <SectionEditor
+        sectionId="partE"
+        title="Part E"
+        fields={[
+          {
+            path: 'partE.tokenPrice',
+            label: 'Token Price',
+            type: 'monetary',
+            currencyPath: 'partE.tokenPriceCurrency',
+          },
+        ]}
+        data={{ partE: { tokenPrice: 1.50, tokenPriceCurrency: 'USD' } } as Record<string, unknown>}
+        mappings={[]}
+        errors={{}}
+        onFieldChange={noop}
+        defaultExpanded
+      />
+    );
+    // The currency select should show USD
+    const select = screen.getByRole('combobox');
+    expect((select as HTMLSelectElement).value).toBe('USD');
+  });
+
+  it('defaults to USD when no currencyPath is set', () => {
+    render(
+      <SectionEditor
+        sectionId="raw"
+        title="Raw"
+        fields={[
+          { path: 'rawFields.E.4', label: 'Min Sub', type: 'monetary' },
+        ]}
+        data={{ rawFields: { 'E.4': 500 } } as Record<string, unknown>}
+        mappings={[]}
+        errors={{}}
+        onFieldChange={noop}
+        defaultExpanded
+      />
+    );
+    const select = screen.getByRole('combobox');
+    expect((select as HTMLSelectElement).value).toBe('USD');
+  });
+});

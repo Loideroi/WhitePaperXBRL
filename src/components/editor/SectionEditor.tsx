@@ -21,6 +21,8 @@ interface SectionField {
   maxLength?: number;
   /** Options for enumeration fields: key → human-readable label */
   options?: Record<string, string>;
+  /** Path to resolve currency for monetary fields (e.g., 'partE.tokenPriceCurrency') */
+  currencyPath?: string;
 }
 
 interface SectionEditorProps {
@@ -213,13 +215,17 @@ export function SectionEditor({
                 );
               }
 
-              case 'monetary':
+              case 'monetary': {
+                const resolvedCurrency = field.currencyPath
+                  ? (getNestedValue(data, field.currencyPath) as string | undefined)
+                  : undefined;
                 return (
                   <MonetaryField
                     key={field.path}
                     path={field.path}
                     label={field.label}
                     value={value as number | undefined}
+                    currency={resolvedCurrency}
                     required={field.required}
                     confidence={confidence}
                     source={source}
@@ -228,6 +234,7 @@ export function SectionEditor({
                     helpText={field.helpText}
                   />
                 );
+              }
 
               case 'textblock':
                 return (

@@ -38,7 +38,7 @@ export function MonetaryField({
   path,
   label,
   value,
-  currency = 'EUR',
+  currency = 'USD',
   required = false,
   confidence,
   source,

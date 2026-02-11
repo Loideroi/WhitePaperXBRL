@@ -37,6 +37,7 @@ interface SectionConfig {
     helpText?: string;
     maxLength?: number;
     options?: Record<string, string>;
+    currencyPath?: string;
   }>;
 }
 
@@ -236,13 +237,13 @@ const SECTIONS: SectionConfig[] = [
     fields: [
       { path: 'rawFields.E.1', label: 'Public Offering or Admission (E.1)', type: 'enumeration', options: PUBLIC_OFFERING_OPTIONS, helpText: 'Type of offering' },
       { path: 'rawFields.E.2', label: 'Reasons for Public Offer (E.2)', type: 'textblock' },
-      { path: 'partE.maxSubscriptionGoal', label: 'Max Subscription Goal (E.3)', type: 'monetary', placeholder: '0.00' },
+      { path: 'partE.maxSubscriptionGoal', label: 'Max Subscription Goal (E.3)', type: 'monetary', placeholder: '0.00', currencyPath: 'partE.maxSubscriptionGoalCurrency' },
       { path: 'rawFields.E.3a', label: 'Max Subscription (units) (E.3a)', type: 'number' },
       { path: 'rawFields.E.4', label: 'Min Subscription Goal (E.4)', type: 'monetary', helpText: 'Minimum in currency' },
       { path: 'rawFields.E.5', label: 'Fundraising Target (E.5)', type: 'monetary' },
       { path: 'rawFields.E.6', label: 'Oversubscription Acceptance (E.6)', type: 'boolean' },
       { path: 'rawFields.E.7', label: 'Oversubscription Allocation (E.7)', type: 'textblock' },
-      { path: 'partE.tokenPrice', label: 'Issue Price (E.8)', type: 'monetary', placeholder: '0.00' },
+      { path: 'partE.tokenPrice', label: 'Issue Price (E.8)', type: 'monetary', placeholder: '0.00', currencyPath: 'partE.tokenPriceCurrency' },
       { path: 'rawFields.E.9', label: 'Currency for Issue Price (E.9)', type: 'enumeration', options: CURRENCY_OPTIONS },
       { path: 'rawFields.E.9a', label: 'Other Tokens for Issue Price (E.9a)', type: 'text' },
       { path: 'rawFields.E.10', label: 'Subscription Fee (E.10)', type: 'monetary' },
