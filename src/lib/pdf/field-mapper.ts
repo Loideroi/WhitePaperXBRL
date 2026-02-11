@@ -1105,7 +1105,7 @@ function extractAllRawFields(text: string): Record<string, string> {
     // Field-specific cleanup for known patterns
     content = cleanFieldSpecific(content, current.fieldNum);
 
-    if (content && content.length > 1) {
+    if (content && content.length >= 1) {
       rawFields[current.fieldNum] = content;
 
       // If this is a range field, also populate all fields in the range
@@ -1244,6 +1244,23 @@ function generateLabelVariants(label: string): string[] {
   return [...variants];
 }
 
+/**
+ * PDF-specific field labels that differ from the ESMA taxonomy labels.
+ * The PDF table "Field" column often uses different wording than the
+ * taxonomy definition, causing label bleed when only taxonomy labels are checked.
+ */
+const PDF_FIELD_LABELS: Record<string, string[]> = {
+  'A.12': ['Members of the management body'],
+  'D.2':  ['Crypto-assets name', 'Crypto-asset name', 'Name of the crypto-asset'],
+  'D.8':  ['Plans for the token'],
+  'D.9':  ['Resource allocation'],
+  'D.10': ['Planned use of Collected funds or crypto-Assets', 'Planned use of collected funds or crypto-assets'],
+  'E.3':  ['Fundraising target'],
+  'E.4':  ['Minimum subscription goals', 'Minimum subscription goal'],
+  'E.5':  ['Maximum subscription goals', 'Maximum subscription goal'],
+  'I.4':  ['Project implementation-related risks', 'Project implementation -related risks'],
+};
+
 function removeFieldLabelFromContent(content: string, fieldNum: string): string {
   // Find the field definition to get its label
   const fieldDef = OTHR_FIELD_DEFINITIONS.find(f => f.number === fieldNum);
@@ -1251,6 +1268,14 @@ function removeFieldLabelFromContent(content: string, fieldNum: string): string 
 
   const label = fieldDef.label;
   const allLabels = generateLabelVariants(label);
+
+  // Also include PDF-specific labels that differ from the taxonomy
+  const pdfLabels = PDF_FIELD_LABELS[fieldNum];
+  if (pdfLabels) {
+    for (const pdfLabel of pdfLabels) {
+      allLabels.push(...generateLabelVariants(pdfLabel));
+    }
+  }
 
   // Try each label variant (original + alternates)
   for (const labelVariant of allLabels) {
@@ -1345,6 +1370,27 @@ function repairLigatures(text: string): string {
   result = result.replace(/([a-zA-Z])\s(fi[a-z])/g, '$1$2');
   // fl ligature: "a fflicted" → "afflicted", "in flation" → "inflation"
   result = result.replace(/([a-zA-Z])\s(fl[a-z])/g, '$1$2');
+
+  // Space-eating ligatures: pdf-parse sometimes consumes the space BEFORE
+  // a ligature-starting word, merging it with the previous word.
+  // e.g., "isfixed" → "is fixed", "afirm" → "a firm", "thefirst" → "the first"
+  // Use specific compound patterns to avoid false positives inside real words
+  // (e.g., "official", "affiliates", "offering" must NOT be split).
+  const mergedWords: [RegExp, string][] = [
+    [/\bisfixed\b/g, 'is fixed'],
+    [/\bisfinanced\b/g, 'is financed'],
+    [/\bisfinal\b/g, 'is final'],
+    [/\basfixed\b/g, 'as fixed'],
+    [/\bthefirst\b/g, 'the first'],
+    [/\bcomesfirst\b/g, 'comes first'],
+    [/\bafirm\b/g, 'a firm'],
+    [/\baflat\b/g, 'a flat'],
+    [/\bpurchasefinancial\b/g, 'purchase financial'],
+  ];
+  for (const [pattern, replacement] of mergedWords) {
+    result = result.replace(pattern, replacement);
+  }
+
   return result;
 }
 
@@ -1412,6 +1458,20 @@ function cleanFieldSpecific(content: string, fieldNum: string): string {
     if (numMatch) return numMatch[0].replace(/,/g, '');
   }
 
+  // S.8: Energy consumption — extract value and unit, strip trailing section text
+  // e.g., "86.68176 kWh Sources and Methodologies" → "86.68176 kWh"
+  if (fieldNum === 'S.8') {
+    const energyMatch = content.match(/^([\d,.]+\s*kWh)/i);
+    if (energyMatch?.[1]) return energyMatch[1];
+  }
+
+  // E.4: Minimum subscription goal — strip stray leading characters from field boundary
+  // e.g., "s No minimum goal" → "No minimum goal"
+  if (fieldNum === 'E.4') {
+    const cleaned = content.replace(/^[a-z]\s+/i, '');
+    if (cleaned !== content) return cleaned;
+  }
+
   return content;
 }
 
@@ -1462,8 +1522,9 @@ function extractFieldsByLabelPattern(text: string, rawFields: Record<string, str
 
     const match = text.match(pattern);
     if (match?.[1]) {
-      const content = cleanFieldContent(match[1]);
-      if (content.length > 1) {
+      let content = cleanFieldContent(match[1]);
+      content = cleanFieldSpecific(content, fieldDef.number);
+      if (content.length >= 1) {
         rawFields[fieldDef.number] = content;
       }
     }
