@@ -1811,6 +1811,23 @@ export function mapPdfToWhitepaper(
   const rawFields = extractAllRawFields(fullText);
   data.rawFields = rawFields;
 
+  // Fill typed paths for not-applicable sections (Parts B and C).
+  // populateNotApplicableSections() already fills rawFields["B.2"]–["B.13"] etc.,
+  // but the editor also has typed paths (partB.legalName, partB.lei, etc.) that
+  // would otherwise stay empty and show as "missing" in coverage reports.
+  if (/Part\s*B\s*does\s*not\s*apply|Issuer\s*(?:is|was)\s*(?:the\s*)?same\s*as\s*(?:the\s*)?Offeror/i.test(fullText)) {
+    const naText = 'Not applicable - Issuer is same as Offeror';
+    if (!data.partB || !(data.partB as Record<string, unknown>).legalName) setNestedValue(data, 'partB.legalName', naText);
+    if (!data.partB || !(data.partB as Record<string, unknown>).registeredAddress) setNestedValue(data, 'partB.registeredAddress', naText);
+    if (!data.partB || !(data.partB as Record<string, unknown>).lei) setNestedValue(data, 'partB.lei', naText);
+  }
+  if (/Part\s*C\s*does\s*not\s*apply|Non-?applicability\s*of\s*Part\s*C/i.test(fullText)) {
+    const naText = 'Not applicable - White paper drafted by Offeror';
+    if (!data.partC || !(data.partC as Record<string, unknown>).legalName) setNestedValue(data, 'partC.legalName', naText);
+    if (!data.partC || !(data.partC as Record<string, unknown>).registeredAddress) setNestedValue(data, 'partC.registeredAddress', naText);
+    if (!data.partC || !(data.partC as Record<string, unknown>).lei) setNestedValue(data, 'partC.lei', naText);
+  }
+
   return {
     data: data as Partial<WhitepaperData>,
     mappings,
