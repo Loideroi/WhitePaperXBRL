@@ -191,13 +191,19 @@ export function SectionEditor({
                   />
                 );
 
-              case 'boolean':
+              case 'boolean': {
+                let boolValue = value as boolean | undefined;
+                if (typeof value === 'string') {
+                  if (/\btrue\b|\byes\b/i.test(value)) boolValue = true;
+                  else if (/\bfalse\b|\bno\b/i.test(value)) boolValue = false;
+                  else boolValue = undefined;
+                }
                 return (
                   <BooleanField
                     key={field.path}
                     path={field.path}
                     label={field.label}
-                    value={value as boolean | undefined}
+                    value={boolValue}
                     required={field.required}
                     confidence={confidence}
                     source={source}
@@ -205,6 +211,7 @@ export function SectionEditor({
                     helpText={field.helpText}
                   />
                 );
+              }
 
               case 'monetary':
                 return (
