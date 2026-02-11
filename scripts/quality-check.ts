@@ -363,11 +363,15 @@ function checkFieldCoverage(data: Partial<WhitepaperData>): void {
       continue;
     }
 
-    // Check for type mismatches (e.g., boolean field has string value)
+    // Check for type mismatches — only for typed paths, not rawFields.
+    // rawFields are always strings (z.record(z.string(), z.string()));
+    // the UI layer handles coercion to boolean/number/monetary at render time.
     let isMismatch = false;
-    if (field.type === 'boolean' && typeof value === 'string') isMismatch = true;
-    if (field.type === 'number' && typeof value === 'string') isMismatch = true;
-    if (field.type === 'monetary' && typeof value === 'string') isMismatch = true;
+    if (!field.path.startsWith('rawFields.')) {
+      if (field.type === 'boolean' && typeof value === 'string') isMismatch = true;
+      if (field.type === 'number' && typeof value === 'string') isMismatch = true;
+      if (field.type === 'monetary' && typeof value === 'string') isMismatch = true;
+    }
 
     if (isMismatch) {
       typeMismatch++;
