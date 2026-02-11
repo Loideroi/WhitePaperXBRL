@@ -59,11 +59,230 @@ interface FieldResult {
 const PLACEHOLDER_LEI = '529900T8BM49AURSDO55';
 const FIXTURES_DIR = path.resolve(__dirname, '../tests/fixtures/whitepapers');
 
+/**
+ * All 192 editor fields from the transform page SECTIONS constant.
+ * Duplicated here as a static list to avoid importing from a 'use client' module.
+ */
+const EDITOR_FIELDS: { path: string; type: string; section: string }[] = [
+  // Part A (21 fields)
+  { path: 'partA.legalName', type: 'text', section: 'partA' },
+  { path: 'rawFields.A.2', type: 'text', section: 'partA' },
+  { path: 'partA.registeredAddress', type: 'textblock', section: 'partA' },
+  { path: 'partA.country', type: 'enumeration', section: 'partA' },
+  { path: 'rawFields.A.3s', type: 'text', section: 'partA' },
+  { path: 'rawFields.A.4', type: 'text', section: 'partA' },
+  { path: 'rawFields.A.4c', type: 'enumeration', section: 'partA' },
+  { path: 'rawFields.A.5', type: 'date', section: 'partA' },
+  { path: 'partA.lei', type: 'text', section: 'partA' },
+  { path: 'rawFields.A.7', type: 'text', section: 'partA' },
+  { path: 'partA.contactPhone', type: 'text', section: 'partA' },
+  { path: 'partA.contactEmail', type: 'text', section: 'partA' },
+  { path: 'rawFields.A.10', type: 'number', section: 'partA' },
+  { path: 'rawFields.A.11', type: 'text', section: 'partA' },
+  { path: 'rawFields.A.13', type: 'textblock', section: 'partA' },
+  { path: 'rawFields.A.14', type: 'textblock', section: 'partA' },
+  { path: 'rawFields.A.15', type: 'boolean', section: 'partA' },
+  { path: 'rawFields.A.16a', type: 'textblock', section: 'partA' },
+  { path: 'rawFields.A.16b', type: 'textblock', section: 'partA' },
+  { path: 'rawFields.A.17', type: 'textblock', section: 'partA' },
+  { path: 'partA.website', type: 'text', section: 'partA' },
+  // Part B (14 fields)
+  { path: 'rawFields.B.1', type: 'boolean', section: 'partB' },
+  { path: 'partB.legalName', type: 'text', section: 'partB' },
+  { path: 'rawFields.B.3', type: 'text', section: 'partB' },
+  { path: 'partB.registeredAddress', type: 'text', section: 'partB' },
+  { path: 'rawFields.B.4c', type: 'enumeration', section: 'partB' },
+  { path: 'rawFields.B.5', type: 'text', section: 'partB' },
+  { path: 'rawFields.B.5c', type: 'enumeration', section: 'partB' },
+  { path: 'rawFields.B.6', type: 'date', section: 'partB' },
+  { path: 'partB.lei', type: 'text', section: 'partB' },
+  { path: 'rawFields.B.8', type: 'text', section: 'partB' },
+  { path: 'rawFields.B.9', type: 'text', section: 'partB' },
+  { path: 'rawFields.B.11', type: 'textblock', section: 'partB' },
+  { path: 'rawFields.B.12', type: 'textblock', section: 'partB' },
+  { path: 'rawFields.B.13', type: 'textblock', section: 'partB' },
+  // Part C (18 fields)
+  { path: 'partC.legalName', type: 'text', section: 'partC' },
+  { path: 'rawFields.C.2', type: 'text', section: 'partC' },
+  { path: 'partC.registeredAddress', type: 'text', section: 'partC' },
+  { path: 'rawFields.C.3c', type: 'enumeration', section: 'partC' },
+  { path: 'rawFields.C.4', type: 'text', section: 'partC' },
+  { path: 'rawFields.C.4c', type: 'enumeration', section: 'partC' },
+  { path: 'rawFields.C.5', type: 'date', section: 'partC' },
+  { path: 'partC.lei', type: 'text', section: 'partC' },
+  { path: 'rawFields.C.7', type: 'text', section: 'partC' },
+  { path: 'rawFields.C.8', type: 'text', section: 'partC' },
+  { path: 'rawFields.C.10', type: 'number', section: 'partC' },
+  { path: 'rawFields.C.11', type: 'textblock', section: 'partC' },
+  { path: 'rawFields.C.12a', type: 'textblock', section: 'partC' },
+  { path: 'rawFields.C.12b', type: 'textblock', section: 'partC' },
+  { path: 'rawFields.C.13a', type: 'textblock', section: 'partC' },
+  { path: 'rawFields.C.13b', type: 'textblock', section: 'partC' },
+  { path: 'rawFields.C.14', type: 'textblock', section: 'partC' },
+  { path: 'rawFields.C.15', type: 'textblock', section: 'partC' },
+  // Part D (16 fields)
+  { path: 'partD.cryptoAssetName', type: 'text', section: 'partD' },
+  { path: 'partD.cryptoAssetSymbol', type: 'text', section: 'partD' },
+  { path: 'partD.projectDescription', type: 'textblock', section: 'partD' },
+  { path: 'rawFields.D.5', type: 'textblock', section: 'partD' },
+  { path: 'rawFields.D.6', type: 'boolean', section: 'partD' },
+  { path: 'rawFields.D.7', type: 'textblock', section: 'partD' },
+  { path: 'rawFields.D.8', type: 'date', section: 'partD' },
+  { path: 'rawFields.D.9', type: 'boolean', section: 'partD' },
+  { path: 'rawFields.D.10', type: 'textblock', section: 'partD' },
+  { path: 'rawFields.D.11', type: 'boolean', section: 'partD' },
+  { path: 'rawFields.D.12', type: 'textblock', section: 'partD' },
+  { path: 'rawFields.D.13', type: 'textblock', section: 'partD' },
+  { path: 'rawFields.D.14', type: 'textblock', section: 'partD' },
+  { path: 'partD.totalSupply', type: 'number', section: 'partD' },
+  { path: 'partD.tokenStandard', type: 'text', section: 'partD' },
+  { path: 'partD.blockchainNetwork', type: 'text', section: 'partD' },
+  { path: 'partD.consensusMechanism', type: 'text', section: 'partD' },
+  // Part E (40 fields)
+  { path: 'rawFields.E.1', type: 'enumeration', section: 'partE' },
+  { path: 'rawFields.E.2', type: 'textblock', section: 'partE' },
+  { path: 'partE.maxSubscriptionGoal', type: 'monetary', section: 'partE' },
+  { path: 'rawFields.E.3a', type: 'number', section: 'partE' },
+  { path: 'rawFields.E.4', type: 'monetary', section: 'partE' },
+  { path: 'rawFields.E.5', type: 'monetary', section: 'partE' },
+  { path: 'rawFields.E.6', type: 'boolean', section: 'partE' },
+  { path: 'rawFields.E.7', type: 'textblock', section: 'partE' },
+  { path: 'partE.tokenPrice', type: 'monetary', section: 'partE' },
+  { path: 'rawFields.E.9', type: 'enumeration', section: 'partE' },
+  { path: 'rawFields.E.9a', type: 'text', section: 'partE' },
+  { path: 'rawFields.E.10', type: 'monetary', section: 'partE' },
+  { path: 'rawFields.E.11', type: 'textblock', section: 'partE' },
+  { path: 'rawFields.E.12', type: 'number', section: 'partE' },
+  { path: 'rawFields.E.13', type: 'enumeration', section: 'partE' },
+  { path: 'rawFields.E.14', type: 'textblock', section: 'partE' },
+  { path: 'rawFields.E.15', type: 'boolean', section: 'partE' },
+  { path: 'rawFields.E.16', type: 'textblock', section: 'partE' },
+  { path: 'rawFields.E.17', type: 'textblock', section: 'partE' },
+  { path: 'rawFields.E.18', type: 'textblock', section: 'partE' },
+  { path: 'rawFields.E.19', type: 'textblock', section: 'partE' },
+  { path: 'rawFields.E.20', type: 'boolean', section: 'partE' },
+  { path: 'partE.publicOfferingStartDate', type: 'date', section: 'partE' },
+  { path: 'partE.publicOfferingEndDate', type: 'date', section: 'partE' },
+  { path: 'rawFields.E.23', type: 'textblock', section: 'partE' },
+  { path: 'rawFields.E.24', type: 'textblock', section: 'partE' },
+  { path: 'rawFields.E.25', type: 'textblock', section: 'partE' },
+  { path: 'partE.withdrawalRights', type: 'boolean', section: 'partE' },
+  { path: 'rawFields.E.27', type: 'textblock', section: 'partE' },
+  { path: 'rawFields.E.28', type: 'text', section: 'partE' },
+  { path: 'rawFields.E.29', type: 'textblock', section: 'partE' },
+  { path: 'rawFields.E.30', type: 'text', section: 'partE' },
+  { path: 'rawFields.E.31', type: 'text', section: 'partE' },
+  { path: 'rawFields.E.32', type: 'enumeration', section: 'partE' },
+  { path: 'rawFields.E.33', type: 'text', section: 'partE' },
+  { path: 'rawFields.E.34', type: 'text', section: 'partE' },
+  { path: 'rawFields.E.35', type: 'textblock', section: 'partE' },
+  { path: 'rawFields.E.36', type: 'textblock', section: 'partE' },
+  { path: 'rawFields.E.37', type: 'textblock', section: 'partE' },
+  { path: 'rawFields.E.38', type: 'textblock', section: 'partE' },
+  { path: 'rawFields.E.39', type: 'textblock', section: 'partE' },
+  { path: 'rawFields.E.40', type: 'textblock', section: 'partE' },
+  // Part F (19 fields)
+  { path: 'partF.classification', type: 'text', section: 'partF' },
+  { path: 'rawFields.F.2', type: 'textblock', section: 'partF' },
+  { path: 'rawFields.F.3', type: 'textblock', section: 'partF' },
+  { path: 'rawFields.F.4', type: 'enumeration', section: 'partF' },
+  { path: 'rawFields.F.5', type: 'enumeration', section: 'partF' },
+  { path: 'rawFields.F.6', type: 'textblock', section: 'partF' },
+  { path: 'rawFields.F.7', type: 'text', section: 'partF' },
+  { path: 'rawFields.F.8', type: 'text', section: 'partF' },
+  { path: 'rawFields.F.9', type: 'date', section: 'partF' },
+  { path: 'rawFields.F.10', type: 'date', section: 'partF' },
+  { path: 'rawFields.F.11', type: 'textblock', section: 'partF' },
+  { path: 'rawFields.F.12', type: 'text', section: 'partF' },
+  { path: 'rawFields.F.13', type: 'text', section: 'partF' },
+  { path: 'rawFields.F.14', type: 'text', section: 'partF' },
+  { path: 'rawFields.F.15', type: 'boolean', section: 'partF' },
+  { path: 'rawFields.F.16', type: 'boolean', section: 'partF' },
+  { path: 'rawFields.F.17', type: 'boolean', section: 'partF' },
+  { path: 'rawFields.F.18', type: 'enumeration', section: 'partF' },
+  { path: 'partF.rightsDescription', type: 'textblock', section: 'partF' },
+  // Part G (19 fields)
+  { path: 'partG.purchaseRights', type: 'textblock', section: 'partG' },
+  { path: 'rawFields.G.2', type: 'textblock', section: 'partG' },
+  { path: 'rawFields.G.3', type: 'textblock', section: 'partG' },
+  { path: 'rawFields.G.4', type: 'textblock', section: 'partG' },
+  { path: 'rawFields.G.5', type: 'number', section: 'partG' },
+  { path: 'rawFields.G.6', type: 'boolean', section: 'partG' },
+  { path: 'rawFields.G.7', type: 'textblock', section: 'partG' },
+  { path: 'rawFields.G.8', type: 'textblock', section: 'partG' },
+  { path: 'rawFields.G.9', type: 'boolean', section: 'partG' },
+  { path: 'rawFields.G.10', type: 'textblock', section: 'partG' },
+  { path: 'partG.transferRestrictions', type: 'textblock', section: 'partG' },
+  { path: 'rawFields.G.12', type: 'boolean', section: 'partG' },
+  { path: 'partG.dynamicSupplyMechanism', type: 'textblock', section: 'partG' },
+  { path: 'rawFields.G.14', type: 'boolean', section: 'partG' },
+  { path: 'rawFields.G.15', type: 'textblock', section: 'partG' },
+  { path: 'rawFields.G.16', type: 'boolean', section: 'partG' },
+  { path: 'rawFields.G.17', type: 'textblock', section: 'partG' },
+  { path: 'rawFields.G.18', type: 'textblock', section: 'partG' },
+  { path: 'rawFields.G.19', type: 'textblock', section: 'partG' },
+  // Part H (10 fields)
+  { path: 'partH.blockchainDescription', type: 'textblock', section: 'partH' },
+  { path: 'rawFields.H.2', type: 'textblock', section: 'partH' },
+  { path: 'rawFields.H.3', type: 'textblock', section: 'partH' },
+  { path: 'rawFields.H.4', type: 'textblock', section: 'partH' },
+  { path: 'rawFields.H.5', type: 'textblock', section: 'partH' },
+  { path: 'rawFields.H.6', type: 'boolean', section: 'partH' },
+  { path: 'rawFields.H.7', type: 'textblock', section: 'partH' },
+  { path: 'rawFields.H.8', type: 'boolean', section: 'partH' },
+  { path: 'rawFields.H.9', type: 'textblock', section: 'partH' },
+  { path: 'partH.smartContractInfo', type: 'textblock', section: 'partH' },
+  // Part I (10 fields)
+  { path: 'rawFields.I.1', type: 'textblock', section: 'partI' },
+  { path: 'rawFields.I.2', type: 'textblock', section: 'partI' },
+  { path: 'rawFields.I.02a', type: 'boolean', section: 'partI' },
+  { path: 'rawFields.I.02b', type: 'boolean', section: 'partI' },
+  { path: 'rawFields.I.03', type: 'boolean', section: 'partI' },
+  { path: 'rawFields.I.3', type: 'textblock', section: 'partI' },
+  { path: 'rawFields.I.4', type: 'textblock', section: 'partI' },
+  { path: 'rawFields.I.5', type: 'textblock', section: 'partI' },
+  { path: 'rawFields.I.6', type: 'textblock', section: 'partI' },
+  { path: 'rawFields.I.07', type: 'textblock', section: 'partI' },
+  // Part J (4 fields)
+  { path: 'rawFields.J.1', type: 'textblock', section: 'partJ' },
+  { path: 'partJ.energyConsumption', type: 'number', section: 'partJ' },
+  { path: 'partJ.consensusMechanismType', type: 'text', section: 'partJ' },
+  { path: 'partJ.renewableEnergyPercentage', type: 'number', section: 'partJ' },
+  // Sustainability (20 fields)
+  { path: 'rawFields.S.1', type: 'text', section: 'sustainability' },
+  { path: 'rawFields.S.2', type: 'text', section: 'sustainability' },
+  { path: 'rawFields.S.3', type: 'text', section: 'sustainability' },
+  { path: 'rawFields.S.4', type: 'textblock', section: 'sustainability' },
+  { path: 'rawFields.S.5', type: 'textblock', section: 'sustainability' },
+  { path: 'rawFields.S.6', type: 'date', section: 'sustainability' },
+  { path: 'rawFields.S.7', type: 'date', section: 'sustainability' },
+  { path: 'rawFields.S.8', type: 'text', section: 'sustainability' },
+  { path: 'rawFields.S.9', type: 'textblock', section: 'sustainability' },
+  { path: 'rawFields.S.10', type: 'number', section: 'sustainability' },
+  { path: 'rawFields.S.11', type: 'text', section: 'sustainability' },
+  { path: 'rawFields.S.12', type: 'text', section: 'sustainability' },
+  { path: 'rawFields.S.13', type: 'text', section: 'sustainability' },
+  { path: 'rawFields.S.14', type: 'text', section: 'sustainability' },
+  { path: 'rawFields.S.15', type: 'textblock', section: 'sustainability' },
+  { path: 'rawFields.S.16', type: 'textblock', section: 'sustainability' },
+  { path: 'rawFields.S.17', type: 'number', section: 'sustainability' },
+  { path: 'rawFields.S.18', type: 'text', section: 'sustainability' },
+  { path: 'rawFields.S.19', type: 'number', section: 'sustainability' },
+  { path: 'rawFields.S.20', type: 'text', section: 'sustainability' },
+];
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function getNestedValue(obj: Record<string, unknown>, dotPath: string): unknown {
+  // rawFields keys contain dots (e.g., "A.2", "E.14") — treat as single key
+  if (dotPath.startsWith('rawFields.')) {
+    const rawFieldKey = dotPath.slice('rawFields.'.length);
+    const rawFields = obj.rawFields as Record<string, unknown> | undefined;
+    return rawFields?.[rawFieldKey];
+  }
+
   const parts = dotPath.split('.');
   let current: unknown = obj;
   for (const part of parts) {
@@ -118,6 +337,77 @@ function truncate(s: string, max: number): string {
 
 function pad(s: string, len: number): string {
   return s.length >= len ? s : s + ' '.repeat(len - s.length);
+}
+
+function checkFieldCoverage(data: Partial<WhitepaperData>): void {
+  const total = EDITOR_FIELDS.length;
+  let populated = 0;
+  let typeMismatch = 0;
+  let missing = 0;
+
+  const sectionStats: Record<string, { populated: number; mismatch: number; missing: number; total: number }> = {};
+  const missingPaths: string[] = [];
+
+  for (const field of EDITOR_FIELDS) {
+    if (!sectionStats[field.section]) {
+      sectionStats[field.section] = { populated: 0, mismatch: 0, missing: 0, total: 0 };
+    }
+    sectionStats[field.section].total++;
+
+    const value = getNestedValue(data as Record<string, unknown>, field.path);
+
+    if (value === undefined || value === null || value === '') {
+      missing++;
+      sectionStats[field.section].missing++;
+      missingPaths.push(field.path);
+      continue;
+    }
+
+    // Check for type mismatches (e.g., boolean field has string value)
+    let isMismatch = false;
+    if (field.type === 'boolean' && typeof value === 'string') isMismatch = true;
+    if (field.type === 'number' && typeof value === 'string') isMismatch = true;
+    if (field.type === 'monetary' && typeof value === 'string') isMismatch = true;
+
+    if (isMismatch) {
+      typeMismatch++;
+      sectionStats[field.section].mismatch++;
+    } else {
+      populated++;
+      sectionStats[field.section].populated++;
+    }
+  }
+
+  console.log('  FIELD COVERAGE:');
+  console.log(`  Populated:     ${populated}/${total} (${Math.round((populated / total) * 100)}%)`);
+  if (typeMismatch > 0) {
+    console.log(`  Type mismatch: ${typeMismatch}/${total} (${Math.round((typeMismatch / total) * 100)}%) — raw strings needing coercion`);
+  }
+  console.log(`  Missing:       ${missing}/${total} (${Math.round((missing / total) * 100)}%)`);
+  console.log('');
+
+  // Section breakdown
+  const sectionLabels: Record<string, string> = {
+    partA: 'Part A', partB: 'Part B', partC: 'Part C', partD: 'Part D',
+    partE: 'Part E', partF: 'Part F', partG: 'Part G', partH: 'Part H',
+    partI: 'Part I', partJ: 'Part J', sustainability: 'Annex S',
+  };
+
+  console.log('  By section:');
+  for (const [section, stats] of Object.entries(sectionStats)) {
+    const label = pad(sectionLabels[section] || section, 10);
+    const parts: string[] = [`${stats.populated}/${stats.total} populated`];
+    if (stats.mismatch > 0) parts.push(`${stats.mismatch} mismatch`);
+    parts.push(`${stats.missing} missing`);
+    console.log(`    ${label} ${parts.join(', ')}`);
+  }
+  console.log('');
+
+  if (missingPaths.length > 0 && missingPaths.length <= 30) {
+    console.log('  Missing fields (no extracted content):');
+    console.log(`    ${missingPaths.join(', ')}`);
+    console.log('');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +508,9 @@ async function runFixture(fixturePath: string): Promise<{ name: string; pct: num
     }
   }
   console.log('');
+
+  // --- Stage 4b: Field Coverage (informational) ---
+  checkFieldCoverage(data);
 
   // --- Stage 5: Validation ---
   const validation = await validateWhitepaper(data, expected.tokenType as 'OTHR', {
