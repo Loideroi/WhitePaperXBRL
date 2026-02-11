@@ -14,7 +14,8 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:pipeline": "vitest run --config vitest.e2e.config.ts"
+    "test:e2e:pipeline": "vitest run --config vitest.e2e.config.ts",
+    "quality-check": "tsx scripts/quality-check.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",
