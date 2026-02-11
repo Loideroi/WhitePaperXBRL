@@ -1102,6 +1102,9 @@ function extractAllRawFields(text: string): Record<string, string> {
     // Clean up formatting
     content = cleanFieldContent(content);
 
+    // Field-specific cleanup for known patterns
+    content = cleanFieldSpecific(content, current.fieldNum);
+
     if (content && content.length > 1) {
       rawFields[current.fieldNum] = content;
 
@@ -1382,6 +1385,34 @@ function cleanFieldContent(content: string): string {
   }
 
   return cleaned;
+}
+
+/**
+ * Field-specific cleanup for known extraction artifacts.
+ * Applied after generic cleaning for fields with predictable format issues.
+ */
+function cleanFieldSpecific(content: string, fieldNum: string): string {
+  // A.10: Response time in days — extract number from "(Days) {7}" or "days 7" patterns
+  if (fieldNum === 'A.10') {
+    // Try to extract a number from patterns like "(Days) {7}", "(Days) 7", "7 days"
+    const bracketMatch = content.match(/\{(\d+)\}/);
+    if (bracketMatch?.[1]) return bracketMatch[1];
+    const daysMatch = content.match(/(?:days?\)?)\s*[:{]?\s*(\d+)/i);
+    if (daysMatch?.[1]) return daysMatch[1];
+    const numMatch = content.match(/(\d+)\s*(?:days?|business\s*days?)/i);
+    if (numMatch?.[1]) return numMatch[1];
+    // Standalone number
+    const pureNum = content.match(/^(\d+)$/);
+    if (pureNum?.[1]) return pureNum[1];
+  }
+
+  // C.10: Number of units — extract number, strip label text
+  if (fieldNum === 'C.10') {
+    const numMatch = content.match(/[\d,]+(?:\.\d+)?/);
+    if (numMatch) return numMatch[0].replace(/,/g, '');
+  }
+
+  return content;
 }
 
 /**
