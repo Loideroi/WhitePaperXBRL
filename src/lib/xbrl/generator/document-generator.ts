@@ -58,6 +58,56 @@ const NAMESPACES: Record<string, string> = {
  */
 const TAXONOMY_REF = 'https://www.esma.europa.eu/taxonomy/2025-03-31/mica/mica_entry_table_2.xsd';
 
+/**
+ * XBRL element names for country enumeration fields.
+ * Used to identify country fields in the rawFields fallback path.
+ */
+const COUNTRY_ENUM_ELEMENTS = new Set([
+  'mica:OfferorsRegisteredCountry',
+  'mica:OfferorsHeadOfficeCountry',
+  'mica:IssuersRegisteredCountry',
+  'mica:IssuersHeadOfficeCountry',
+  'mica:OperatorsRegisteredCountry',
+  'mica:OperatorsHeadOfficeCountry',
+  'mica:DomicileOfCompanyOfPersonInvolvedInImplementationOfOtherToken',
+]);
+
+/**
+ * Try to extract an ISO 3166-1 alpha-2 country code from address-like text.
+ * Used when rawFields contain full addresses instead of just country codes.
+ */
+function tryExtractCountryCode(text: string): string | null {
+  const countryMap: Record<string, string> = {
+    switzerland: 'CH', malta: 'MT', germany: 'DE', france: 'FR',
+    ireland: 'IE', netherlands: 'NL', luxembourg: 'LU', austria: 'AT',
+    belgium: 'BE', spain: 'ES', italy: 'IT', portugal: 'PT', poland: 'PL',
+    'united kingdom': 'GB', singapore: 'SG', indonesia: 'ID',
+    iceland: 'IS', liechtenstein: 'LI', norway: 'NO',
+    'united states': 'US', canada: 'CA', australia: 'AU', japan: 'JP',
+    brazil: 'BR', 'united arab emirates': 'AE', israel: 'IL',
+    'south korea': 'KR', india: 'IN', china: 'CN', turkey: 'TR',
+    'south africa': 'ZA', 'new zealand': 'NZ', gibraltar: 'GI',
+    sweden: 'SE', denmark: 'DK', finland: 'FI', greece: 'GR',
+    hungary: 'HU', romania: 'RO', bulgaria: 'BG', croatia: 'HR',
+    cyprus: 'CY', czechia: 'CZ', estonia: 'EE', latvia: 'LV',
+    lithuania: 'LT', slovakia: 'SK', slovenia: 'SI',
+  };
+  // Try last comma-separated component first (common address format)
+  const parts = text.split(',').map(p => p.trim());
+  if (parts.length >= 2) {
+    const last = parts[parts.length - 1].toLowerCase();
+    for (const [name, code] of Object.entries(countryMap)) {
+      if (last.includes(name)) return code;
+    }
+  }
+  // Try full text
+  const lower = text.toLowerCase();
+  for (const [name, code] of Object.entries(countryMap)) {
+    if (lower.includes(name)) return code;
+  }
+  return null;
+}
+
 const NUMERIC_DATA_TYPES: XBRLDataType[] = [
   'monetaryItemType',
   'decimalItemType',
@@ -179,6 +229,11 @@ function mapDataToFactValues(
     if (countryUri) {
       setEnumValue('mica:OfferorsRegisteredCountry', country, countryUri,
         getEnumerationLabel('mica:OfferorsRegisteredCountry', country) || country);
+      // Also set head office country to same value if not explicitly different
+      if (!values.has('mica:OfferorsHeadOfficeCountry')) {
+        setEnumValue('mica:OfferorsHeadOfficeCountry', country, countryUri,
+          getEnumerationLabel('mica:OfferorsHeadOfficeCountry', country) || country);
+      }
     }
   }
 
@@ -373,12 +428,23 @@ function mapDataToFactValues(
 
         // For enumeration fields, try to resolve to taxonomy URI
         if (fieldDef.isHidden && fieldDef.dataType === 'enumerationItemType') {
-          // Try to get the enumeration URI
-          const enumUri = getEnumerationUri(fieldDef.xbrlElement, trimmedContent);
+          // Try to get the enumeration URI directly (works when value is already a code like "CH")
+          let enumKey = trimmedContent;
+          let enumUri = getEnumerationUri(fieldDef.xbrlElement, enumKey);
+
+          // For country fields, try extracting a country code from address-like text
+          if (!enumUri && COUNTRY_ENUM_ELEMENTS.has(fieldDef.xbrlElement)) {
+            const extracted = tryExtractCountryCode(trimmedContent);
+            if (extracted) {
+              enumKey = extracted;
+              enumUri = getEnumerationUri(fieldDef.xbrlElement, enumKey);
+            }
+          }
+
           if (enumUri) {
-            const humanLabel = getEnumerationLabel(fieldDef.xbrlElement, trimmedContent) || trimmedContent;
+            const humanLabel = getEnumerationLabel(fieldDef.xbrlElement, enumKey) || enumKey;
             values.set(fieldDef.xbrlElement, {
-              value: trimmedContent,
+              value: enumKey,
               contextRef: ctxRef,
               taxonomyUri: enumUri,
               humanReadable: humanLabel,
