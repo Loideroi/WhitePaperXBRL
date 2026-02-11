@@ -651,5 +651,56 @@ describe('mapPdfToWhitepaper', () => {
         expect(rawS3).toContain('$SPURS');
       }
     });
+
+    it('should strip label using "crypto-asset" variant of "other token" label', () => {
+      // E.30 OTHR label is "Other token service provider (CASP) name"
+      // but PDF says "Crypto-asset service provider (CASP) name"
+      const extraction = createExtractionResult([
+        ['partE', 'E.30    Crypto-asset service provider (CASP) name Socios Europe Services Limited'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      const rawE30 = result.data.rawFields?.['E.30'];
+      expect(rawE30).toBeDefined();
+      if (rawE30) {
+        expect(rawE30).not.toMatch(/service provider/i);
+        expect(rawE30).toContain('Socios Europe Services Limited');
+      }
+    });
+
+    it('should strip label with "of the" variant', () => {
+      // S.3 OTHR label is "Name of crypto-asset"
+      // but PDF says "Name of the crypto-asset"
+      const extraction = createExtractionResult([
+        ['partS', 'S.3    Name of the crypto-asset$PERSIJA'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      const rawS3 = result.data.rawFields?.['S.3'];
+      expect(rawS3).toBeDefined();
+      if (rawS3) {
+        expect(rawS3).not.toContain('Name of');
+        expect(rawS3).toContain('$PERSIJA');
+      }
+    });
+
+    it('should strip label with "offered/traded" variant of "offered or traded"', () => {
+      // E.12 OTHR label is "Total number of offered or traded other tokens"
+      // but PDF says "Total number of offered/traded crypto-assets"
+      const extraction = createExtractionResult([
+        ['partE', 'E.12    Total number of offered/traded crypto-assets50,000'],
+      ]);
+
+      const result = mapPdfToWhitepaper(extraction);
+
+      const rawE12 = result.data.rawFields?.['E.12'];
+      expect(rawE12).toBeDefined();
+      if (rawE12) {
+        expect(rawE12).not.toMatch(/Total number/i);
+        expect(rawE12).toContain('50,000');
+      }
+    });
   });
 });

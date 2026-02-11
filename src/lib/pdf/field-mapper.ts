@@ -1198,30 +1198,80 @@ function normalizeFieldNumber(fieldNum: string): string | null {
 /**
  * Remove field label from the start of content
  */
+/**
+ * Generate alternate label variants for label stripping.
+ * PDFs often use different wording than the ESMA taxonomy field definitions:
+ * - "other token" ↔ "crypto-asset" / "crypto-assets"
+ * - "Name of crypto-asset" ↔ "Name of the crypto-asset"
+ * - "offered or traded" ↔ "offered/traded"
+ */
+function generateLabelVariants(label: string): string[] {
+  const variants = new Set<string>([label]);
+
+  // Apply substitution rules iteratively so combined changes are generated
+  // e.g., "offered or traded other tokens" → "offered/traded crypto-assets"
+  const rules: [RegExp, string[]][] = [
+    [/other\s+tokens?/i, ['crypto-assets', 'crypto-asset']],
+    [/crypto[- ]?assets?/i, ['other tokens', 'other token']],
+    [/offered\s+or\s+traded/i, ['offered/traded']],
+    [/\bof\s+(?!the\b)/i, ['of the ']],  // "of X" → "of the X"
+  ];
+  // Also reverse: "of the X" → "of X"
+  if (/\bof\s+the\b/i.test(label)) {
+    variants.add(label.replace(/\bof\s+the\s+/gi, 'of '));
+  }
+
+  // "white paper" ↔ "crypto-asset white paper"
+  if (/\bwhite\s+paper\b/i.test(label) && !/crypto/i.test(label)) {
+    variants.add(label.replace(/white\s+paper/gi, 'crypto-asset white paper'));
+  }
+
+  // Apply rules iteratively — each round applies one rule to all existing variants
+  for (const [pattern, replacements] of rules) {
+    const current = [...variants];
+    for (const v of current) {
+      if (pattern.test(v)) {
+        for (const replacement of replacements) {
+          variants.add(v.replace(new RegExp(pattern.source, 'gi'), replacement));
+        }
+      }
+    }
+  }
+
+  return [...variants];
+}
+
 function removeFieldLabelFromContent(content: string, fieldNum: string): string {
   // Find the field definition to get its label
   const fieldDef = OTHR_FIELD_DEFINITIONS.find(f => f.number === fieldNum);
   if (!fieldDef) return content;
 
-  // Build flexible regex: replace spaces in label with \s+ to handle
-  // newlines, extra spaces, non-breaking spaces within PDF-extracted label text
   const label = fieldDef.label;
-  const flexibleLabel = escapeRegexSpecialChars(label).replace(/ /g, '\\s+');
-  const labelPattern = new RegExp(`^${flexibleLabel}\\s*`, 'i');
-  const withoutLabel = content.replace(labelPattern, '').trim();
+  const allLabels = generateLabelVariants(label);
 
-  // Also try without parenthetical text
-  const shortLabel = label.replace(/\s*\([^)]+\)\s*/g, '').trim();
-  if (shortLabel !== label) {
-    const flexibleShort = escapeRegexSpecialChars(shortLabel).replace(/ /g, '\\s+');
-    const shortLabelPattern = new RegExp(`^${flexibleShort}\\s*`, 'i');
-    const withoutShortLabel = content.replace(shortLabelPattern, '').trim();
-    if (withoutShortLabel.length < content.length) {
-      return withoutShortLabel;
+  // Try each label variant (original + alternates)
+  for (const labelVariant of allLabels) {
+    // Build flexible regex: replace spaces with \s+ to handle PDF whitespace
+    const flexibleLabel = escapeRegexSpecialChars(labelVariant).replace(/ /g, '\\s+');
+    const labelPattern = new RegExp(`^${flexibleLabel}\\s*`, 'i');
+    const withoutLabel = content.replace(labelPattern, '').trim();
+    if (withoutLabel.length < content.length) {
+      return withoutLabel;
+    }
+
+    // Also try without parenthetical text
+    const shortLabel = labelVariant.replace(/\s*\([^)]+\)\s*/g, '').trim();
+    if (shortLabel !== labelVariant) {
+      const flexibleShort = escapeRegexSpecialChars(shortLabel).replace(/ /g, '\\s+');
+      const shortLabelPattern = new RegExp(`^${flexibleShort}\\s*`, 'i');
+      const withoutShortLabel = content.replace(shortLabelPattern, '').trim();
+      if (withoutShortLabel.length < content.length) {
+        return withoutShortLabel;
+      }
     }
   }
 
-  return withoutLabel.length < content.length ? withoutLabel : content;
+  return content;
 }
 
 /**
