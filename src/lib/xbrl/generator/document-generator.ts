@@ -95,7 +95,7 @@ function tryExtractCountryCode(text: string): string | null {
   // Try last comma-separated component first (common address format)
   const parts = text.split(',').map(p => p.trim());
   if (parts.length >= 2) {
-    const last = parts[parts.length - 1].toLowerCase();
+    const last = parts[parts.length - 1]?.toLowerCase() ?? '';
     for (const [name, code] of Object.entries(countryMap)) {
       if (last.includes(name)) return code;
     }
