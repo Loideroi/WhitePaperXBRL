@@ -352,13 +352,14 @@ function checkFieldCoverage(data: Partial<WhitepaperData>): void {
     if (!sectionStats[field.section]) {
       sectionStats[field.section] = { populated: 0, mismatch: 0, missing: 0, total: 0 };
     }
-    sectionStats[field.section].total++;
+    const stats = sectionStats[field.section]!;
+    stats.total++;
 
     const value = getNestedValue(data as Record<string, unknown>, field.path);
 
     if (value === undefined || value === null || value === '') {
       missing++;
-      sectionStats[field.section].missing++;
+      stats.missing++;
       missingPaths.push(field.path);
       continue;
     }
@@ -375,10 +376,10 @@ function checkFieldCoverage(data: Partial<WhitepaperData>): void {
 
     if (isMismatch) {
       typeMismatch++;
-      sectionStats[field.section].mismatch++;
+      stats.mismatch++;
     } else {
       populated++;
-      sectionStats[field.section].populated++;
+      stats.populated++;
     }
   }
 
@@ -530,7 +531,7 @@ async function runFixture(fixturePath: string): Promise<{ name: string; pct: num
   if (validation.errors.length > 0) {
     console.log(`  Errors (${validation.errors.length}):`);
     for (const err of validation.errors.slice(0, 5)) {
-      console.log(`    - ${err.field}: ${err.message}`);
+      console.log(`    - ${err.element}: ${err.message}`);
     }
     if (validation.errors.length > 5) {
       console.log(`    ... and ${validation.errors.length - 5} more`);
@@ -539,7 +540,7 @@ async function runFixture(fixturePath: string): Promise<{ name: string; pct: num
   if (validation.warnings.length > 0) {
     console.log(`  Warnings (${validation.warnings.length}):`);
     for (const warn of validation.warnings.slice(0, 3)) {
-      console.log(`    - ${warn.field}: ${warn.message}`);
+      console.log(`    - ${warn.element}: ${warn.message}`);
     }
     if (validation.warnings.length > 3) {
       console.log(`    ... and ${validation.warnings.length - 3} more`);
