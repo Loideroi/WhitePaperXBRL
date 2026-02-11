@@ -1380,12 +1380,19 @@ function repairLigatures(text: string): string {
     [/\bisfixed\b/g, 'is fixed'],
     [/\bisfinanced\b/g, 'is financed'],
     [/\bisfinal\b/g, 'is final'],
+    [/\bwasfixed\b/g, 'was fixed'],
     [/\basfixed\b/g, 'as fixed'],
     [/\bthefirst\b/g, 'the first'],
     [/\bcomesfirst\b/g, 'comes first'],
     [/\bafirm\b/g, 'a firm'],
+    [/\bafixed\b/g, 'a fixed'],
     [/\baflat\b/g, 'a flat'],
     [/\bpurchasefinancial\b/g, 'purchase financial'],
+    [/\bimprovedfinancial\b/g, 'improved financial'],
+    [/\bcontinuedfinancial\b/g, 'continued financial'],
+    [/\bincludingfiat\b/gi, 'including fiat'],
+    [/\bachievefinality\b/g, 'achieve finality'],
+    [/\bmayfluctuate\b/g, 'may fluctuate'],
   ];
   for (const [pattern, replacement] of mergedWords) {
     result = result.replace(pattern, replacement);
@@ -1460,9 +1467,10 @@ function cleanFieldSpecific(content: string, fieldNum: string): string {
 
   // S.8: Energy consumption — extract value and unit, strip trailing section text
   // e.g., "86.68176 kWh Sources and Methodologies" → "86.68176 kWh"
+  // Normalize casing: "Kwh" / "KWH" → "kWh"
   if (fieldNum === 'S.8') {
-    const energyMatch = content.match(/^([\d,.]+\s*kWh)/i);
-    if (energyMatch?.[1]) return energyMatch[1];
+    const energyMatch = content.match(/^([\d,.]+)\s*kwh/i);
+    if (energyMatch?.[1]) return `${energyMatch[1]} kWh`;
   }
 
   // E.4: Minimum subscription goal — strip stray leading characters from field boundary

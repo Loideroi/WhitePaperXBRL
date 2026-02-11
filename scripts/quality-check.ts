@@ -1,12 +1,14 @@
 /**
  * Quality Benchmark Script for PDF Extraction Pipeline
  *
- * Runs the PERSIJA PDF through the full pipeline (extract → map → validate → generate)
- * and compares extracted values against known correct values from a ground truth fixture.
+ * Runs PDFs through the full pipeline (extract → map → validate → generate)
+ * and compares extracted values against known correct values from ground truth fixtures.
  *
  * Usage:
- *   npm run quality-check
- *   npx tsx scripts/quality-check.ts
+ *   npm run quality-check                    # Run all fixtures
+ *   npx tsx scripts/quality-check.ts         # Run all fixtures
+ *   npx tsx scripts/quality-check.ts spurs   # Run only SPURS
+ *   npx tsx scripts/quality-check.ts spurs arg  # Run SPURS and ARG
  */
 
 import fs from 'fs';
@@ -55,16 +57,12 @@ interface FieldResult {
 // ---------------------------------------------------------------------------
 
 const PLACEHOLDER_LEI = '529900T8BM49AURSDO55';
-const EXPECTED_PATH = path.resolve(
-  __dirname,
-  '../tests/fixtures/whitepapers/persija-expected.json'
-);
+const FIXTURES_DIR = path.resolve(__dirname, '../tests/fixtures/whitepapers');
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Get a nested property from an object by dot path */
 function getNestedValue(obj: Record<string, unknown>, dotPath: string): unknown {
   const parts = dotPath.split('.');
   let current: unknown = obj;
@@ -75,7 +73,6 @@ function getNestedValue(obj: Record<string, unknown>, dotPath: string): unknown 
   return current;
 }
 
-/** Check if a value matches a FieldMatcher */
 function matchField(value: unknown, matcher: FieldMatcher): { pass: boolean; expected: string; issue?: string } {
   if ('equals' in matcher) {
     const pass = value === matcher.equals;
@@ -124,25 +121,24 @@ function pad(s: string, len: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Main
+// Run a single fixture
 // ---------------------------------------------------------------------------
 
-async function main() {
+async function runFixture(fixturePath: string): Promise<{ name: string; pct: number; passed: boolean }> {
   const startTime = Date.now();
+  const fixtureName = path.basename(fixturePath, '-expected.json').toUpperCase();
 
-  // Load expected data
-  const expected: ExpectedData = JSON.parse(fs.readFileSync(EXPECTED_PATH, 'utf-8'));
+  const expected: ExpectedData = JSON.parse(fs.readFileSync(fixturePath, 'utf-8'));
 
-  // Resolve PDF path
   const pdfPath = path.resolve(expected.pdf);
   if (!fs.existsSync(pdfPath)) {
-    console.error(`PDF not found: ${pdfPath}`);
-    process.exit(1);
+    console.error(`  PDF not found: ${pdfPath}`);
+    return { name: fixtureName, pct: 0, passed: false };
   }
 
   console.log('');
   console.log('═══════════════════════════════════════════════════');
-  console.log('  PERSIJA Quality Benchmark');
+  console.log(`  ${fixtureName} Quality Benchmark`);
   console.log('═══════════════════════════════════════════════════');
   console.log('');
 
@@ -258,13 +254,11 @@ async function main() {
   const ixbrl = generateIXBRLDocument(data);
   const ixbrlChecks: { label: string; pass: boolean; detail?: string }[] = [];
 
-  // XML declaration
   ixbrlChecks.push({
     label: 'XML declaration present',
     pass: ixbrl.startsWith('<?xml'),
   });
 
-  // Namespaces
   for (const ns of expected.iXBRL.requiredNamespaces) {
     ixbrlChecks.push({
       label: `xmlns:${ns} declared`,
@@ -272,13 +266,11 @@ async function main() {
     });
   }
 
-  // ix:header
   ixbrlChecks.push({
     label: 'ix:header present',
     pass: ixbrl.includes('<ix:header>'),
   });
 
-  // Fact counts
   const nonNumericCount = (ixbrl.match(/<ix:nonNumeric/g) || []).length;
   const nonFractionCount = (ixbrl.match(/<ix:nonFraction/g) || []).length;
   ixbrlChecks.push({
@@ -292,7 +284,6 @@ async function main() {
     detail: `${nonFractionCount} (min: ${expected.iXBRL.minNonFractionFacts})`,
   });
 
-  // mustContain
   for (const text of expected.iXBRL.mustContain) {
     ixbrlChecks.push({
       label: `contains "${truncate(text, 30)}"`,
@@ -300,10 +291,7 @@ async function main() {
     });
   }
 
-  // mustNotContain
   for (const text of expected.iXBRL.mustNotContain) {
-    // Check for the literal string surrounded by tag boundaries or whitespace,
-    // not as part of a longer word
     const pattern = new RegExp(`(?<![a-zA-Z])${text}(?![a-zA-Z])`, 'i');
     const found = pattern.test(ixbrl);
     ixbrlChecks.push({
@@ -313,13 +301,11 @@ async function main() {
     });
   }
 
-  // No xbrli:segment
   ixbrlChecks.push({
     label: 'no xbrli:segment (uses scenario)',
     pass: !ixbrl.includes('xbrli:segment'),
   });
 
-  // Embedded CSS
   ixbrlChecks.push({
     label: 'CSS embedded (not external)',
     pass: ixbrl.includes('<style') && !/<link[^>]+rel=["']stylesheet["']/.test(ixbrl),
@@ -351,9 +337,61 @@ async function main() {
   console.log('═══════════════════════════════════════════════════');
   console.log('');
 
-  // Exit with non-zero if score below threshold
-  if (pct < 70) {
-    console.log('\x1b[31m  FAIL: Score below 70% threshold\x1b[0m');
+  return { name: fixtureName, pct, passed: pct >= 70 };
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+async function main() {
+  const args = process.argv.slice(2);
+
+  // Discover fixtures
+  let fixturePaths: string[];
+  if (args.length > 0) {
+    fixturePaths = args.map((name) => {
+      const normalized = name.toLowerCase().replace(/-expected(\.json)?$/, '');
+      return path.join(FIXTURES_DIR, `${normalized}-expected.json`);
+    });
+  } else {
+    const files = fs.readdirSync(FIXTURES_DIR).filter((f) => f.endsWith('-expected.json'));
+    fixturePaths = files.map((f) => path.join(FIXTURES_DIR, f));
+  }
+
+  if (fixturePaths.length === 0) {
+    console.error('No fixtures found in', FIXTURES_DIR);
+    process.exit(1);
+  }
+
+  const results: { name: string; pct: number; passed: boolean }[] = [];
+
+  for (const fp of fixturePaths) {
+    if (!fs.existsSync(fp)) {
+      console.error(`Fixture not found: ${fp}`);
+      results.push({ name: path.basename(fp), pct: 0, passed: false });
+      continue;
+    }
+    results.push(await runFixture(fp));
+  }
+
+  // Grand summary
+  if (results.length > 1) {
+    console.log('');
+    console.log('═══════════════════════════════════════════════════');
+    console.log('  OVERALL SUMMARY');
+    console.log('═══════════════════════════════════════════════════');
+    for (const r of results) {
+      const icon = r.passed ? '\x1b[32m✅\x1b[0m' : '\x1b[31m❌\x1b[0m';
+      console.log(`  ${icon} ${pad(r.name, 12)} ${r.pct}%`);
+    }
+    console.log('═══════════════════════════════════════════════════');
+    console.log('');
+  }
+
+  const anyFail = results.some((r) => !r.passed);
+  if (anyFail) {
+    console.log('\x1b[31m  FAIL: One or more fixtures below 70% threshold\x1b[0m');
     process.exit(1);
   }
 }
