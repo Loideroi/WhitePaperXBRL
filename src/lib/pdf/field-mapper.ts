@@ -1554,6 +1554,12 @@ function populateNotApplicableSections(text: string, rawFields: Record<string, s
   const partBNotApplicable = /Part\s*B\s*does\s*not\s*apply|Issuer\s*(?:is|was)\s*(?:the\s*)?same\s*as\s*(?:the\s*)?Offeror/i.test(text);
   const partCNotApplicable = /Part\s*C\s*does\s*not\s*apply|Non-?applicability\s*of\s*Part\s*C/i.test(text);
 
+  // Sub-field variants that the integer loop doesn't cover
+  const subFieldVariants: Record<string, string[]> = {
+    B: ['B.4c', 'B.5c'],
+    C: ['C.3c', 'C.4c', 'C.12a', 'C.12b', 'C.13a', 'C.13b'],
+  };
+
   // Fill in Part B fields if not applicable
   if (partBNotApplicable) {
     const range = sectionRanges.B;
@@ -1563,6 +1569,11 @@ function populateNotApplicableSections(text: string, rawFields: Record<string, s
         const fieldNum = `B.${i}`;
         if (!rawFields[fieldNum]) {
           rawFields[fieldNum] = explanation;
+        }
+      }
+      for (const v of subFieldVariants.B!) {
+        if (!rawFields[v]) {
+          rawFields[v] = explanation;
         }
       }
     }
@@ -1577,6 +1588,11 @@ function populateNotApplicableSections(text: string, rawFields: Record<string, s
         const fieldNum = `C.${i}`;
         if (!rawFields[fieldNum]) {
           rawFields[fieldNum] = explanation;
+        }
+      }
+      for (const v of subFieldVariants.C!) {
+        if (!rawFields[v]) {
+          rawFields[v] = explanation;
         }
       }
     }
@@ -1826,6 +1842,23 @@ export function mapPdfToWhitepaper(
     if (!data.partC || !(data.partC as Record<string, unknown>).legalName) setNestedValue(data, 'partC.legalName', naText);
     if (!data.partC || !(data.partC as Record<string, unknown>).registeredAddress) setNestedValue(data, 'partC.registeredAddress', naText);
     if (!data.partC || !(data.partC as Record<string, unknown>).lei) setNestedValue(data, 'partC.lei', naText);
+  }
+
+  // Copy populated rawFields to typed paths where no MICA_SECTION_MAPPING exists.
+  // These rawFields are already extracted; the typed paths just lack a mapping.
+  const rawToTyped: Array<{ raw: string; part: string; field: string }> = [
+    { raw: 'F.1', part: 'partF', field: 'classification' },
+    { raw: 'F.2', part: 'partF', field: 'rightsDescription' },
+    { raw: 'G.1', part: 'partG', field: 'purchaseRights' },
+    { raw: 'G.3', part: 'partG', field: 'transferRestrictions' },
+    { raw: 'G.5', part: 'partG', field: 'dynamicSupplyMechanism' },
+    { raw: 'A.8', part: 'partA', field: 'contactPhone' },
+  ];
+  for (const { raw, part, field } of rawToTyped) {
+    const rawValue = (data.rawFields as Record<string, string> | undefined)?.[raw];
+    if (rawValue && !(data[part as keyof typeof data] as Record<string, unknown>)?.[field]) {
+      setNestedValue(data, `${part}.${field}`, rawValue);
+    }
   }
 
   return {
