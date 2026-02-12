@@ -7,7 +7,7 @@
  * Full validation engine implementation in Phase 5.
  */
 
-import { AlertCircle, AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle, Info, ArrowRight } from 'lucide-react';
 
 export interface ValidationError {
   /** Field path */
@@ -106,17 +106,25 @@ export function ValidationDashboard({
               {/* Content */}
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-foreground">{error.message}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs text-muted-foreground">{error.path}</span>
+                  {error.code && (
+                    <span className="text-xs text-muted-foreground">({error.code})</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Fix Button */}
+              {onFieldClick && (
                 <button
                   type="button"
-                  onClick={() => onFieldClick?.(error.path)}
-                  className="text-xs text-primary hover:underline mt-1"
+                  onClick={() => onFieldClick(error.path)}
+                  className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors flex-shrink-0"
                 >
-                  {error.path}
+                  Fix
+                  <ArrowRight className="h-3 w-3" />
                 </button>
-                {error.code && (
-                  <span className="text-xs text-muted-foreground ml-2">({error.code})</span>
-                )}
-              </div>
+              )}
             </div>
           ))}
         </div>

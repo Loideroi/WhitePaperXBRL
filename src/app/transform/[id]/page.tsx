@@ -452,6 +452,7 @@ export default function TransformPage() {
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [showValidation, setShowValidation] = useState(false);
+  const [forcedExpandSection, setForcedExpandSection] = useState<string | null>(null);
   const [previewContent, setPreviewContent] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const downloadRef = useRef<HTMLAnchorElement>(null);
@@ -853,9 +854,35 @@ export default function TransformPage() {
                   errors={validationErrors}
                   isValidating={generateState === 'validating'}
                   onFieldClick={(path) => {
-                    const sectionId = path.split('.')[0];
-                    const element = document.getElementById(sectionId || '');
-                    element?.scrollIntoView({ behavior: 'smooth' });
+                    // Determine section from path (rawFields.A.2 → partA, partB.lei → partB)
+                    let sectionId: string;
+                    if (path.startsWith('rawFields.')) {
+                      const fieldKey = path.slice('rawFields.'.length);
+                      const letter = fieldKey.charAt(0).toUpperCase();
+                      const letterToSection: Record<string, string> = {
+                        A: 'partA', B: 'partB', C: 'partC', D: 'partD',
+                        E: 'partE', F: 'partF', G: 'partG', H: 'partH',
+                        I: 'partI', J: 'partJ', S: 'sustainability',
+                      };
+                      sectionId = letterToSection[letter] || 'partA';
+                    } else {
+                      sectionId = path.split('.')[0] || 'partA';
+                    }
+
+                    // Force-expand the target section
+                    setForcedExpandSection(sectionId);
+
+                    // Scroll to section, then to the specific field
+                    setTimeout(() => {
+                      document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' });
+                      setTimeout(() => {
+                        const fieldEl = document.getElementById(path);
+                        if (fieldEl) {
+                          fieldEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          fieldEl.focus();
+                        }
+                      }, 300);
+                    }, 50);
                   }}
                 />
               </div>
@@ -909,6 +936,7 @@ export default function TransformPage() {
               errors={errors}
               onFieldChange={handleFieldChange}
               defaultExpanded={section.id === 'partA'}
+              expanded={forcedExpandSection === section.id}
             />
           ))}
         </div>

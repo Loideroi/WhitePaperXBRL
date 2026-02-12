@@ -7,7 +7,7 @@
  */
 
 import { ChevronDown, ChevronRight, AlertCircle, CheckCircle } from 'lucide-react';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { TextField, BooleanField, MonetaryField, TextBlockField, DateField, EnumerationField } from './fields';
 import type { MappedField, ConfidenceLevel } from '@/types/whitepaper';
 
@@ -44,6 +44,8 @@ interface SectionEditorProps {
   onFieldChange: (path: string, value: unknown) => void;
   /** Whether the section is initially expanded */
   defaultExpanded?: boolean;
+  /** Programmatically force the section open (e.g., from "Fix" button) */
+  expanded?: boolean;
 }
 
 function getSectionConfidence(mappings: MappedField[], sectionId: string): number {
@@ -99,8 +101,16 @@ export function SectionEditor({
   errors,
   onFieldChange,
   defaultExpanded = true,
+  expanded,
 }: SectionEditorProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+
+  // Allow parent to force-expand the section (e.g., via "Fix" button)
+  useEffect(() => {
+    if (expanded) {
+      setIsExpanded(true);
+    }
+  }, [expanded]);
 
   const toggleExpanded = useCallback(() => {
     setIsExpanded((prev) => !prev);
@@ -113,7 +123,7 @@ export function SectionEditor({
   ).length;
 
   return (
-    <div className="rounded-lg border bg-card overflow-hidden">
+    <div id={sectionId} className="rounded-lg border bg-card overflow-hidden">
       {/* Header */}
       <button
         type="button"

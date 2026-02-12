@@ -209,6 +209,15 @@ export function validateLEI(
 }
 
 /**
+ * Check if a value is a "not applicable" placeholder (e.g., prose text
+ * like "Not applicable - Issuer is same as Offeror"). These should not
+ * be validated as real LEIs.
+ */
+function isNotApplicable(value?: string): boolean {
+  return !value || /not\s*applicable/i.test(value);
+}
+
+/**
  * Validate multiple LEIs (for offeror, issuer, operator)
  */
 export function validateAllLEIs(
@@ -226,8 +235,8 @@ export function validateAllLEIs(
     });
   }
 
-  // Issuer LEI (if different from offeror)
-  if (issuerLei && issuerLei !== offerorLei) {
+  // Issuer LEI (if different from offeror, and not a "not applicable" placeholder)
+  if (issuerLei && issuerLei !== offerorLei && !isNotApplicable(issuerLei)) {
     const issuerResult = validateLEI(issuerLei);
     if ('errors' in issuerResult) {
       issuerResult.errors.forEach((e) => {
@@ -241,8 +250,8 @@ export function validateAllLEIs(
     }
   }
 
-  // Operator LEI (if provided)
-  if (operatorLei && operatorLei !== offerorLei) {
+  // Operator LEI (if provided, and not a "not applicable" placeholder)
+  if (operatorLei && operatorLei !== offerorLei && !isNotApplicable(operatorLei)) {
     const operatorResult = validateLEI(operatorLei);
     if ('errors' in operatorResult) {
       operatorResult.errors.forEach((e) => {

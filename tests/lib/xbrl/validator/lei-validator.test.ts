@@ -136,5 +136,28 @@ describe('LEI Validator', () => {
 
       expect(errors.length).toBe(0);
     });
+
+    it('should skip issuer/operator LEI validation for "not applicable" values', () => {
+      const errors = validateAllLEIs(
+        '529900T8BM49AURSDO55',
+        'Not applicable - Issuer is same as Offeror',
+        'Not applicable - Issuer is same as Offeror'
+      );
+
+      // Only offeror is validated; issuer/operator are skipped
+      expect(errors.length).toBe(0);
+      expect(errors.some((e) => e.fieldPath === 'partB.lei')).toBe(false);
+      expect(errors.some((e) => e.fieldPath === 'partC.lei')).toBe(false);
+    });
+
+    it('should skip LEI validation for case-insensitive "not applicable" variants', () => {
+      const errors = validateAllLEIs(
+        '529900T8BM49AURSDO55',
+        'NOT APPLICABLE',
+        'notapplicable'
+      );
+
+      expect(errors.length).toBe(0);
+    });
   });
 });
