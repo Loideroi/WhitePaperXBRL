@@ -1861,6 +1861,16 @@ export function mapPdfToWhitepaper(
     }
   }
 
+  // Derive sub-fields from already-extracted parent data.
+  // These are skipped by the /[a-z]$/ filter in extractAllRawFields()
+  // but their content is already available from parent fields.
+  if (rawFields['A.16'] && !rawFields['A.16a']) {
+    rawFields['A.16a'] = rawFields['A.16'];
+  }
+  if (data.partA && (data.partA as Record<string, unknown>).country && !rawFields['A.4c']) {
+    rawFields['A.4c'] = (data.partA as Record<string, unknown>).country as string;
+  }
+
   return {
     data: data as Partial<WhitepaperData>,
     mappings,
