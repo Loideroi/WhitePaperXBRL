@@ -63,7 +63,7 @@
     "E.4": { "matches": "^No minimum" },
     "E.5": { "matches": "^25,000" },
     "E.8": { "contains": "is fixed" },
-    "E.9": { "contains": "CHZ" },
+    "E.9": { "equals": "USD" },
     "E.12": { "contains": "50,000" },
     "E.13": { "contains": "ALL" },
     "E.14": { "contains": "Socios.com Wallet" },

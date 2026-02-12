@@ -62,7 +62,7 @@
     "E.4": { "matches": "^No minimum" },
     "E.5": { "matches": "^No maximum" },
     "E.8": { "contains": "was fixed" },
-    "E.9": { "contains": "CHZ" },
+    "E.9": { "equals": "USD" },
     "E.12": { "contains": "500,000" },
     "E.13": { "contains": "RETL" },
     "E.14": { "contains": "Socios.com" },

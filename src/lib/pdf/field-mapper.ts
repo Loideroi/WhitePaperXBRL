@@ -1871,6 +1871,14 @@ export function mapPdfToWhitepaper(
     rawFields['A.4c'] = (data.partA as Record<string, unknown>).country as string;
   }
 
+  // E.9 is an enumeration field (EUR/USD/GBP/CHF) but raw extraction captures
+  // the full prose text. Override with the already-extracted currency code so
+  // the UI dropdown renders correctly.
+  const extractedCurrency = (data.partE as Record<string, unknown> | undefined)?.tokenPriceCurrency as string | undefined;
+  if (extractedCurrency && ['EUR', 'USD', 'GBP', 'CHF'].includes(extractedCurrency)) {
+    rawFields['E.9'] = extractedCurrency;
+  }
+
   return {
     data: data as Partial<WhitepaperData>,
     mappings,
