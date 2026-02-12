@@ -76,18 +76,10 @@ export function renderSection(
   const title = SECTION_TITLES[sectionKey] || `Section ${sectionKey}`;
   const tableClass = sectionKey === 'S' ? 'sustainability' : 'accounts';
 
-  // Collect continuation fragments that need to be placed after the table
-  const continuationFragments: string[] = [];
-
   const rows = fields
     .filter(f => !f.isDimensional) // Dimensional fields rendered separately
-    .map(field => renderFieldRow(field, values, hiddenFacts, continuationFragments))
+    .map(field => renderFieldRow(field, values, hiddenFacts))
     .join('\n');
-
-  // Continuation elements are placed after the table they belong to
-  const continuationHtml = continuationFragments.length > 0
-    ? `\n    <div class="continuations">${continuationFragments.join('\n')}</div>`
-    : '';
 
   return `
     <h2 class="section-heading">${escapeHtml(title)}</h2>
@@ -102,7 +94,7 @@ export function renderSection(
       <tbody>
 ${rows}
       </tbody>
-    </table>${continuationHtml}`;
+    </table>`;
 }
 
 /**
@@ -110,7 +102,7 @@ ${rows}
  *
  * For text blocks exceeding TEXT_BLOCK_CONTINUATION_THRESHOLD characters,
  * the content is split into fragments: the first fragment stays in the table cell,
- * and subsequent fragments are appended as ix:continuation elements after the table.
+ * and subsequent ix:continuation elements are placed in the same cell.
  *
  * The field number and label cells use ix:exclude when the content cell contains
  * a tagged fact, since those cells are non-data content within a tagged region context.
@@ -118,13 +110,11 @@ ${rows}
  * @param field - The MiCA field definition
  * @param values - Map of xbrlElement to fact values
  * @param hiddenFacts - Array to push hidden fact entries into
- * @param continuationFragments - Array to push continuation HTML strings into
  */
 function renderFieldRow(
   field: MiCAFieldDefinition,
   values: Map<string, FactValue>,
-  hiddenFacts: HiddenFactEntry[],
-  continuationFragments: string[]
+  hiddenFacts: HiddenFactEntry[]
 ): string {
   const factValue = values.get(field.xbrlElement);
 
@@ -159,9 +149,8 @@ function renderFieldRow(
       fragments,
       isTextBlock: true,
     });
-    contentCell = `<td><div class="text-block">${primary}</div></td>`;
-    // Append continuation elements to be rendered after the table
-    continuationFragments.push(...continuations);
+    const continuationHtml = continuations.join('\n');
+    contentCell = `<td><div class="text-block">${primary}</div>${continuationHtml}</td>`;
   } else {
     // Regular inline fact
     hasTaggedFact = true;

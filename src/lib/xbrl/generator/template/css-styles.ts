@@ -307,23 +307,6 @@ table.sustainability td {
   text-align: center;
 }
 
-/* ix:continuation blocks rendered after tables.
-   These contain overflow text from long facts split across fragments.
-   Style them as continuation of the table content. */
-.continuations {
-  padding: 2.5mm 4mm;
-  font-size: 9pt;
-  line-height: 1.6;
-  color: #1a1a1a;
-  border: 0.5pt solid #cccccc;
-  border-top: none;
-  background: #f8f9fa;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  margin-bottom: 5mm;
-}
-
 /* Inline XBRL fact highlighting (for viewing tools) */
 ix\\:nonNumeric,
 ix\\:nonFraction {
