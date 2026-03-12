@@ -422,9 +422,10 @@ function mapDataToFactValues(
         content = rawFields[parentNum];
       }
 
-      if (content && content.trim().length > 0) {
+      const contentStr = content != null ? String(content) : '';
+      if (contentStr.trim().length > 0) {
         const ctxRef = fieldDef.periodType === 'instant' ? instantContextId : durationContextId;
-        const trimmedContent = content.trim();
+        const trimmedContent = contentStr.trim();
 
         // For enumeration fields, try to resolve to taxonomy URI
         if (fieldDef.isHidden && fieldDef.dataType === 'enumerationItemType') {

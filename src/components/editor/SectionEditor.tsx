@@ -276,7 +276,7 @@ export function SectionEditor({
                     confidence={confidence}
                     source={source}
                     error={error}
-                    onChange={(path, val) => onFieldChange(path, val ? Number(val) : undefined)}
+                    onChange={(path, val) => onFieldChange(path, val || undefined)}
                     helpText={field.helpText}
                   />
                 );
