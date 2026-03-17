@@ -309,6 +309,132 @@ const COMMON_VALUE_ASSERTIONS: ValueAssertion[] = [
     },
   },
 
+  // Conditional consistency: H.6 (DLT indicator) → H.7 (DLT description)
+  {
+    id: 'VAL-015',
+    description: 'DLT description (H.7) cannot be "Non applicable" when DLT is used (H.6=true)',
+    tokenTypes: ['OTHR', 'ART', 'EMT'],
+    severity: 'ERROR',
+    validate: (data) => {
+      const dataObj = data as Record<string, unknown>;
+      const rawFields = dataObj.rawFields as Record<string, string> | undefined;
+      const h6 = rawFields?.['H.6'];
+      const h7 = rawFields?.['H.7'];
+
+      if (h6 && /true|yes/i.test(h6) && h7 && /non[\s-]?applicable|n\/?a/i.test(h7)) {
+        return {
+          ruleId: 'VAL-015',
+          severity: 'ERROR',
+          message: 'H.7 (DLT functionality description) cannot be "Non applicable" when H.6 (use of DLT) is true',
+          fieldPath: 'rawFields.H.7',
+        };
+      }
+      return null;
+    },
+  },
+
+  // Conditional consistency: B.1 (issuer different) → Section B must have content
+  {
+    id: 'VAL-016',
+    description: 'Section B must contain issuer details when B.1 indicates issuer is different from offeror',
+    tokenTypes: ['OTHR', 'ART', 'EMT'],
+    severity: 'ERROR',
+    validate: (data) => {
+      const dataObj = data as Record<string, unknown>;
+      const rawFields = dataObj.rawFields as Record<string, string> | undefined;
+      const b1 = rawFields?.['B.1'];
+
+      if (b1 && /true|yes/i.test(b1)) {
+        // Check if any Section B content exists (either typed or rawFields)
+        const hasTypedB = data.partB?.legalName;
+        const hasBFields = rawFields && Object.keys(rawFields).some(
+          k => k.startsWith('B.') && k !== 'B.1' && rawFields[k]?.trim()
+        );
+
+        if (!hasTypedB && !hasBFields) {
+          return {
+            ruleId: 'VAL-016',
+            severity: 'ERROR',
+            message: 'B.1 is marked as true but no issuer information has been provided in Section B',
+            fieldPath: 'partB',
+          };
+        }
+      }
+      return null;
+    },
+  },
+
+  // H.9 should reflect audit outcome when audit indicator is set
+  {
+    id: 'VAL-017',
+    description: 'Audit outcome (H.9) should reflect the actual outcome when audits have been conducted',
+    tokenTypes: ['OTHR', 'ART', 'EMT'],
+    severity: 'WARNING',
+    validate: (data) => {
+      const dataObj = data as Record<string, unknown>;
+      const rawFields = dataObj.rawFields as Record<string, string> | undefined;
+      const h8 = rawFields?.['H.8'];
+      const h9 = rawFields?.['H.9'];
+
+      // If audit indicator is true but outcome is empty or N/A
+      if (h8 && /true|yes/i.test(h8) && (!h9 || /non[\s-]?applicable|n\/?a/i.test(h9))) {
+        return {
+          ruleId: 'VAL-017',
+          severity: 'WARNING',
+          message: 'H.9 (audit outcome) should reflect the actual outcome of the audit when H.8 indicates audits were conducted',
+          fieldPath: 'rawFields.H.9',
+        };
+      }
+      return null;
+    },
+  },
+
+  // E.23: CASP name should not be an abbreviation
+  {
+    id: 'VAL-018',
+    description: 'CASP name should be the full name, not an abbreviation',
+    tokenTypes: ['OTHR', 'ART', 'EMT'],
+    severity: 'WARNING',
+    validate: (data) => {
+      const dataObj = data as Record<string, unknown>;
+      const rawFields = dataObj.rawFields as Record<string, string> | undefined;
+      const e23 = rawFields?.['E.23'];
+
+      if (e23 && e23.trim().length > 0 && e23.trim().length <= 5 && e23 === e23.toUpperCase()) {
+        return {
+          ruleId: 'VAL-018',
+          severity: 'WARNING',
+          message: `E.23: CASP name "${e23}" appears to be an abbreviation. Use the full name so it is understandable to retail investors`,
+          fieldPath: 'rawFields.E.23',
+        };
+      }
+      return null;
+    },
+  },
+
+  // F.1: Minimum content length for description fields
+  {
+    id: 'VAL-019',
+    description: 'Token description (F.1) should provide sufficient detail',
+    tokenTypes: ['OTHR', 'ART', 'EMT'],
+    severity: 'WARNING',
+    validate: (data) => {
+      const dataObj = data as Record<string, unknown>;
+      const rawFields = dataObj.rawFields as Record<string, string> | undefined;
+      const f1 = rawFields?.['F.1'];
+
+      if (f1 && f1.trim().length > 0 && f1.trim().length < 50) {
+        return {
+          ruleId: 'VAL-019',
+          severity: 'WARNING',
+          message: 'F.1 (token description) appears too brief. Regulators require sufficient detail',
+          fieldPath: 'rawFields.F.1',
+        };
+      }
+      return null;
+    },
+  },
+
   // Energy consumption validation
   {
     id: 'VAL-013',

@@ -31,6 +31,16 @@ function createMinimalData(): Partial<WhitepaperData> {
     partH: {
       blockchainDescription: 'Ethereum-based token',
     },
+    rawFields: {
+      'D.13': 'Funds will be used for platform development',
+      'D.14': 'Resources allocated to engineering and marketing',
+      'E.32': 'direct',
+      'F.5': 'notification',
+      'F.8': 'https://example.com',
+      'G.5': '1000000',
+      'A.12': 'Management body consists of CEO and CFO',
+      'A.16': 'The offeror maintains healthy financial reserves',
+    },
   };
 }
 

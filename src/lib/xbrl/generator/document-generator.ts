@@ -36,6 +36,7 @@ import {
   getEnumerationLabel,
 } from './mica-template/enumeration-mappings';
 import { detectDuplicateFacts, type DuplicateFactResult } from '../validator/duplicate-detector';
+import { getLanguageName } from './template/language-support';
 
 /**
  * XBRL Namespaces for the document root element
@@ -319,7 +320,9 @@ function mapDataToFactValues(
   // Part F mappings
   setValueIfPresent('mica:OtherTokenType', getNestedValue(dataObj, 'partD.tokenStandard'));
   setValueIfPresent('mica:DescriptionOfOtherTokenCharacteristicsExplanatory', getNestedValue(dataObj, 'partF.classification'));
-  setValueIfPresent('mica:InformationAboutLanguagesUsedInOtherTokenWhitePaper', data.language || 'en');
+  // F.12: Regulator requires full language name (e.g., "English"), not ISO code ("en")
+  const langCode = data.language || 'en';
+  setValueIfPresent('mica:InformationAboutLanguagesUsedInOtherTokenWhitePaper', getLanguageName(langCode));
 
   // Part G mappings
   setValueIfPresent('mica:InformationAboutPurchaserRightsAndObligationsExplanatory', getNestedValue(dataObj, 'partG.purchaseRights'));

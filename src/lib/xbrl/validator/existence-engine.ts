@@ -138,6 +138,70 @@ const COMMON_ASSERTIONS: ExistenceAssertion[] = [
     condition: { fieldPath: 'partE.isPublicOffering', value: true },
   },
 
+  // Part D: Additional required fields
+  {
+    id: 'EXS-D-005',
+    description: 'Planned use of funds is required (D.13)',
+    fieldPath: 'rawFields.D.13',
+    elementName: 'mica:PlannedUseOfFundsExplanatory',
+    tokenTypes: ['OTHR', 'ART', 'EMT'],
+    severity: 'ERROR',
+  },
+  {
+    id: 'EXS-D-006',
+    description: 'Resource allocation is required (D.14)',
+    fieldPath: 'rawFields.D.14',
+    elementName: 'mica:ResourceAllocationExplanatory',
+    tokenTypes: ['OTHR', 'ART', 'EMT'],
+    severity: 'ERROR',
+  },
+
+  // Part E: Additional required fields
+  {
+    id: 'EXS-E-003',
+    description: 'Placement form is required (E.32)',
+    fieldPath: 'rawFields.E.32',
+    elementName: 'mica:PlacementFormForOtherToken',
+    tokenTypes: ['OTHR'],
+    severity: 'ERROR',
+  },
+  {
+    id: 'EXS-E-004',
+    description: 'Firm commitment basis must be indicated (E.32)',
+    fieldPath: 'rawFields.E.32',
+    elementName: 'mica:PlacementFormForOtherToken',
+    tokenTypes: ['OTHR'],
+    severity: 'WARNING',
+  },
+
+  // Part F: Required fields
+  {
+    id: 'EXS-F-001',
+    description: 'Issuer website is required (F.8)',
+    fieldPath: 'rawFields.F.8',
+    elementName: 'mica:OtherTokenIssuersWebsite',
+    tokenTypes: ['OTHR', 'ART', 'EMT'],
+    severity: 'ERROR',
+  },
+  {
+    id: 'EXS-F-002',
+    description: 'Type of submission is required (F.5)',
+    fieldPath: 'rawFields.F.5',
+    elementName: 'mica:OtherTokenTypeOfSubmission',
+    tokenTypes: ['OTHR'],
+    severity: 'ERROR',
+  },
+
+  // Part G: Required fields
+  {
+    id: 'EXS-G-001',
+    description: 'Issuer retained tokens is required (G.5)',
+    fieldPath: 'rawFields.G.5',
+    elementName: 'mica:NumberOfIssuersRetainedOtherTokens',
+    tokenTypes: ['OTHR'],
+    severity: 'ERROR',
+  },
+
   // Part H: Technology
   {
     id: 'EXS-H-001',
@@ -146,6 +210,35 @@ const COMMON_ASSERTIONS: ExistenceAssertion[] = [
     elementName: 'mica:BlockchainDescription',
     tokenTypes: ['OTHR', 'ART', 'EMT'],
     severity: 'ERROR',
+  },
+
+  // Part A: Management information
+  {
+    id: 'EXS-A-007',
+    description: 'Management information is required (A.12)',
+    fieldPath: 'rawFields.A.12',
+    elementName: 'mica:OfferorManagementBodyMembersExplanatory',
+    tokenTypes: ['OTHR', 'ART', 'EMT'],
+    severity: 'ERROR',
+  },
+  {
+    id: 'EXS-A-008',
+    description: 'Financial condition description is required (A.16)',
+    fieldPath: 'rawFields.A.16',
+    elementName: 'mica:OfferorFinancialConditionExplanatory',
+    tokenTypes: ['OTHR', 'ART', 'EMT'],
+    severity: 'ERROR',
+  },
+
+  // Part B: Conditional on B.1 = true
+  {
+    id: 'EXS-B-001',
+    description: 'Issuer information required when B.1 indicates issuer is different from offeror',
+    fieldPath: 'partB.legalName',
+    elementName: 'mica:IssuerLegalName',
+    tokenTypes: ['OTHR'],
+    severity: 'ERROR',
+    condition: { fieldPath: 'rawFields.B.1', value: 'true' },
   },
 ];
 
@@ -276,16 +369,30 @@ export function getExistenceAssertions(tokenType: TokenType): ExistenceAssertion
 }
 
 /**
- * Get nested value from object by path
+ * Get nested value from object by path.
+ * Handles compound keys like "rawFields.D.13" where "D.13" is a single key.
  */
 function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
   const parts = path.split('.');
   let current: unknown = obj;
 
-  for (const part of parts) {
+  for (let i = 0; i < parts.length; i++) {
     if (current === null || current === undefined) return undefined;
     if (typeof current !== 'object') return undefined;
-    current = (current as Record<string, unknown>)[part];
+
+    const rec = current as Record<string, unknown>;
+    const part = parts[i]!;
+
+    if (part in rec) {
+      current = rec[part];
+    } else {
+      // Try joining remaining parts as a compound key (e.g., "D.13")
+      const compoundKey = parts.slice(i).join('.');
+      if (compoundKey in rec) {
+        return rec[compoundKey];
+      }
+      return undefined;
+    }
   }
 
   return current;

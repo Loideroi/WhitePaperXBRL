@@ -93,6 +93,8 @@ const TARGETED_HOLDERS_OPTIONS: Record<string, string> = {
 const PLACEMENT_FORM_OPTIONS: Record<string, string> = {
   direct: 'Direct placement',
   throughCASP: 'Through CASP',
+  firmCommitment: 'With firm commitment basis',
+  withoutFirmCommitment: 'Without firm commitment basis',
 };
 
 const WHITE_PAPER_TYPE_OPTIONS: Record<string, string> = {
@@ -103,6 +105,7 @@ const WHITE_PAPER_TYPE_OPTIONS: Record<string, string> = {
 const SUBMISSION_TYPE_OPTIONS: Record<string, string> = {
   notification: 'Notification',
   application: 'Application for admission to trading',
+  modification: 'Modification',
 };
 
 const PERSON_TYPE_OPTIONS: Record<string, string> = {

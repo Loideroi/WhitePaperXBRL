@@ -10,6 +10,7 @@
 | 4 | Phase 3: UI — Preview Page | DONE | (existed) |
 | 5 | Phase 6: Integration — End-to-end flow | DONE | see below |
 | 6 | Phase 6: Integration — Error handling & loading states | DONE | (existed) |
+| 0 | **CRITICAL: Regulator Feedback Fixes** | IN PROGRESS | |
 | 7 | Tier 1: ART Token Type (Table 3) | PENDING | |
 | 8 | Tier 1: EMT Token Type (Table 4) | PENDING | |
 | 9 | Tier 1: Block Tagging (ix:continuation / ix:exclude) | DONE | 5a53a53 |
@@ -68,6 +69,45 @@
 - New `/api/lei-lookup` route for client-side lookups
 - Optional `LEI_API_KEY` env var for authenticated API access
 - DOMException-safe error handling for jsdom compatibility
+
+### Regulator Feedback Fixes (#0) — 2026-03-17
+
+First XBRL submission rejected with 22 items. Fixes applied:
+
+**Code Fixes (DONE):**
+- F.5: Added `modification` (MODI) enum value to SUBMISSION_TYPE_ENUM
+- F.12: Changed language output from ISO code ("en") to full name ("English")
+- E.32: Added `firmCommitment`/`withoutFirmCommitment` placement form enum values
+- UI: Updated transform page dropdowns for F.5 and E.32
+
+**New Existence Assertions (DONE):**
+- EXS-D-005: D.13 (planned use of funds) required
+- EXS-D-006: D.14 (resource allocation) required
+- EXS-E-003: E.32 (placement form) required
+- EXS-F-001: F.8 (issuer website) required
+- EXS-F-002: F.5 (submission type) required
+- EXS-G-001: G.5 (retained tokens) required
+- EXS-A-007: A.12 (management info) required
+- EXS-A-008: A.16 (financial condition) required
+- EXS-B-001: B.1=true → issuer info required (conditional)
+
+**New Value Assertions (DONE):**
+- VAL-015: H.6=true → H.7 can't be "Non applicable"
+- VAL-016: B.1=true → Section B must have content
+- VAL-017: H.8=true → H.9 should reflect audit outcome
+- VAL-018: E.23 CASP name too short / abbreviation warning
+- VAL-019: F.1 description too brief warning
+
+**Infrastructure Fix (DONE):**
+- `getNestedValue()` in existence-engine now handles compound keys (e.g., `rawFields.D.13`)
+
+**Open Questions (BLOCKED — awaiting user answers):**
+1. #13 (F.4): Does F.4 need ART/EMT/OCA enum values? What taxonomy URIs?
+2. #8 (E.21/E.22): Content fix or add past-date validation?
+3. #2 (Statement 6): Which MiCA Article 6 summary statement?
+4. #17 (F.15/F.16): What is unclear — labels or values?
+5. #22 (Part I ToC): Is PDF ToC bleeding into Part I extraction?
+6. #11,18 (E.40→Part F, F.19→Part G): Cross-reference contamination — need to investigate PDF extraction boundaries
 
 ## Notes
 

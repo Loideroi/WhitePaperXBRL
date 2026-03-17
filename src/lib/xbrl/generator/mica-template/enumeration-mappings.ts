@@ -76,6 +76,14 @@ export const PLACEMENT_FORM_ENUM: Record<string, EnumerationMapping> = {
     humanReadable: 'Through CASP',
     taxonomyUri: `${TAXONOMY_BASE}#ThroughCASP`,
   },
+  firmCommitment: {
+    humanReadable: 'With firm commitment basis',
+    taxonomyUri: `${TAXONOMY_BASE}#WithFirmCommitmentBasis`,
+  },
+  withoutFirmCommitment: {
+    humanReadable: 'Without firm commitment basis',
+    taxonomyUri: `${TAXONOMY_BASE}#WithoutFirmCommitmentBasis`,
+  },
 };
 
 /**
@@ -103,6 +111,10 @@ export const SUBMISSION_TYPE_ENUM: Record<string, EnumerationMapping> = {
   application: {
     humanReadable: 'Application for admission to trading',
     taxonomyUri: `${TAXONOMY_BASE}#ApplicationForAdmissionToTrading`,
+  },
+  modification: {
+    humanReadable: 'Modification',
+    taxonomyUri: `${TAXONOMY_BASE}#Modification`,
   },
 };
 
