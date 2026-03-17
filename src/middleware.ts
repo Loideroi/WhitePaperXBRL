@@ -12,5 +12,8 @@ export const config = {
     '/transform/:path*',
     '/api/generate',
     '/api/validate',
+    '/api/upload',
+    '/api/lei-lookup',
+    '/api/batch',
   ],
 };

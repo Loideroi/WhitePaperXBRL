@@ -13,6 +13,7 @@ import {
   getClientIdentifier,
   rateLimitHeaders,
   RATE_LIMITS,
+  sanitizeFilename,
 } from '@/lib/security';
 
 /**
@@ -142,9 +143,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Generate iXBRL document
     const ixbrlContent = generateIXBRLDocument(whitepaperData);
 
-    // Generate filename
-    const outputFilename = filename ||
+    // Generate filename — sanitize to prevent header injection (H1 fix)
+    const rawFilename = filename ||
       `whitepaper-${whitepaperData.partD?.cryptoAssetSymbol?.toLowerCase() || 'crypto'}-${whitepaperData.documentDate}.xhtml`;
+    const outputFilename = sanitizeFilename(rawFilename);
 
     // Return as downloadable file
     return new NextResponse(ixbrlContent, {

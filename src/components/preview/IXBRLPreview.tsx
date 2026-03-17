@@ -127,11 +127,18 @@ export function IXBRLPreview({ content, filename, onClose, onDownload }: IXBRLPr
     const lines = xml.split('\n');
 
     return lines.map((line, lineIndex) => {
-      // Apply highlighting patterns
-      const highlighted = line
+      // C1 fix: Escape HTML entities BEFORE applying highlighting
+      const escaped = line
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+      // Apply highlighting patterns on escaped text
+      const highlighted = escaped
         // Tags
         .replace(
-          /(&lt;|<)(\/?)([\w:-]+)/g,
+          /(&lt;)(\/?)([\w:-]+)/g,
           '<span class="text-blue-600">&lt;$2</span><span class="text-purple-600">$3</span>'
         )
         // Attributes
@@ -141,17 +148,17 @@ export function IXBRLPreview({ content, filename, onClose, onDownload }: IXBRLPr
         )
         // Attribute values
         .replace(
-          /="([^"]*)"/g,
-          '="<span class="text-green-600">$1</span>"'
+          /=&quot;([^&]*)&quot;/g,
+          '=&quot;<span class="text-green-600">$1</span>&quot;'
         )
         // Closing bracket
         .replace(
-          /(\/?&gt;|\/?>)/g,
+          /(\/?&gt;)/g,
           '<span class="text-blue-600">$1</span>'
         )
         // Comments
         .replace(
-          /(&lt;!--|<!--)([\s\S]*?)(--&gt;|-->)/g,
+          /(&lt;!--)([\s\S]*?)(--&gt;)/g,
           '<span class="text-gray-500 italic">$1$2$3</span>'
         );
 
@@ -252,7 +259,7 @@ export function IXBRLPreview({ content, filename, onClose, onDownload }: IXBRLPr
             <div className="p-4 h-full">
               <iframe
                 srcDoc={content}
-                sandbox="allow-same-origin"
+                sandbox=""
                 title="iXBRL Document Preview"
                 className="w-full h-full min-h-[70vh] bg-white rounded-lg border"
               />
