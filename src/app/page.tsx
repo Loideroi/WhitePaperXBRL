@@ -1,17 +1,21 @@
 import { FileUp, CheckCircle, Download, Shield } from 'lucide-react';
 import { UploadZone } from '@/components/upload';
 import { RecentSessions } from '@/components/upload/RecentSessions';
+import { SignInButton } from '@/components/auth/SignInButton';
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-background to-muted">
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto flex h-16 items-center px-4">
-          <h1 className="text-xl font-bold">WhitePaper XBRL</h1>
-          <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
-            MiCA Compliant
-          </span>
+        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          <div className="flex items-center">
+            <h1 className="text-xl font-bold">WhitePaper XBRL</h1>
+            <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+              MiCA Compliant
+            </span>
+          </div>
+          <SignInButton />
         </div>
       </header>
 
