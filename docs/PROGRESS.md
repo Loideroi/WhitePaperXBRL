@@ -11,8 +11,8 @@
 | 5 | Phase 6: Integration — End-to-end flow | DONE | see below |
 | 6 | Phase 6: Integration — Error handling & loading states | DONE | (existed) |
 | 0 | **CRITICAL: Regulator Feedback Fixes** | IN PROGRESS | |
-| 7 | Tier 1: ART Token Type (Table 3) | PENDING | |
-| 8 | Tier 1: EMT Token Type (Table 4) | PENDING | |
+| 7 | Tier 1: ART Token Type (Table 3) | DONE | 12a16f0 |
+| 8 | Tier 1: EMT Token Type (Table 4) | DONE | 12a16f0 |
 | 9 | Tier 1: Block Tagging (ix:continuation / ix:exclude) | DONE | 5a53a53 |
 | 10 | Tier 1: Duplicate Fact Detection | DONE | bcba0c9 |
 | 11 | Tier 1: Multi-Language Output | DONE | 88e9978 |
@@ -100,6 +100,16 @@ First XBRL submission rejected with 22 items. Fixes applied:
 
 **Infrastructure Fix (DONE):**
 - `getNestedValue()` in existence-engine now handles compound keys (e.g., `rawFields.D.13`)
+
+### ART/EMT Token Types (#7, #8) — 2026-03-17
+
+- Architecture: `TAXONOMY_REFS` dynamic per token type (Table 2/3/4)
+- `getFieldDefinitions(tokenType)` returns correct field definitions
+- ART: 92 fields across Parts A-I, with 8 enumeration mappings
+- EMT: 69 fields across Parts A-I, with 8 enumeration mappings
+- 22 new enumeration mappings (countries, member states, placement forms, etc.)
+- Generator rawFields loop uses token-type-aware field definitions
+- UI: Existing transform page works for all token types (labels are OTHR-centric, can be refined later)
 
 **Open Questions (BLOCKED — awaiting user answers):**
 1. #13 (F.4): Does F.4 need ART/EMT/OCA enum values? What taxonomy URIs?
