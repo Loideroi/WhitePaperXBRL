@@ -63,7 +63,7 @@ function validateRequiredFields(data: Partial<WhitepaperData>): ValidationError[
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // Rate limiting
   const clientId = getClientIdentifier(request);
-  const rateLimit = checkRateLimit(`generate:${clientId}`, RATE_LIMITS.generate);
+  const rateLimit = await checkRateLimit(`generate:${clientId}`, RATE_LIMITS.generate);
 
   if (!rateLimit.allowed) {
     return NextResponse.json(

@@ -1,26 +1,18 @@
 /**
- * Simple in-memory rate limiter for API routes
+ * Rate limiter with Upstash Redis backend and in-memory fallback
  *
- * In production, consider using Redis or a dedicated rate limiting service.
+ * When UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are configured,
+ * uses Upstash's sliding window algorithm for distributed rate limiting.
+ * Otherwise, falls back to a simple in-memory implementation suitable
+ * for local development and single-instance deployments.
  */
 
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
-}
+import { Redis } from '@upstash/redis';
+import { Ratelimit } from '@upstash/ratelimit';
 
-// In-memory store (use Redis in production)
-const store = new Map<string, RateLimitEntry>();
-
-// Clean up expired entries periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of store.entries()) {
-    if (entry.resetAt <= now) {
-      store.delete(key);
-    }
-  }
-}, 60 * 1000); // Every minute
+// ---------------------------------------------------------------------------
+// Shared types (public interface — kept identical to the original)
+// ---------------------------------------------------------------------------
 
 export interface RateLimitConfig {
   /** Maximum requests allowed in the window */
@@ -40,15 +32,36 @@ export interface RateLimitResult {
   limit: number;
 }
 
-/**
- * Check rate limit for a given identifier
- */
-export function checkRateLimit(
+// ---------------------------------------------------------------------------
+// In-memory fallback implementation
+// ---------------------------------------------------------------------------
+
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+/** In-memory store used when Redis is not configured */
+const memoryStore = new Map<string, RateLimitEntry>();
+
+// Clean up expired entries periodically
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of memoryStore.entries()) {
+      if (entry.resetAt <= now) {
+        memoryStore.delete(key);
+      }
+    }
+  }, 60 * 1000);
+}
+
+function checkRateLimitInMemory(
   identifier: string,
   config: RateLimitConfig
 ): RateLimitResult {
   const now = Date.now();
-  const entry = store.get(identifier);
+  const entry = memoryStore.get(identifier);
 
   // If no entry or window expired, create new entry
   if (!entry || entry.resetAt <= now) {
@@ -56,7 +69,7 @@ export function checkRateLimit(
       count: 1,
       resetAt: now + config.windowMs,
     };
-    store.set(identifier, newEntry);
+    memoryStore.set(identifier, newEntry);
 
     return {
       allowed: true,
@@ -87,9 +100,111 @@ export function checkRateLimit(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Upstash Redis implementation
+// ---------------------------------------------------------------------------
+
+/** Cached Redis client (singleton) */
+let redisClient: Redis | null = null;
+
+/** Cache of Ratelimit instances keyed by "limit:windowMs" */
+const ratelimitCache = new Map<string, Ratelimit>();
+
 /**
- * Get client identifier from request
- * Uses X-Forwarded-For header or falls back to a default
+ * Check whether Upstash Redis credentials are available.
+ * Reads directly from process.env to avoid circular dependency with env.ts
+ * and to support hot-reload of env vars.
+ */
+function isRedisConfigured(): boolean {
+  return !!(
+    process.env.UPSTASH_REDIS_REST_URL &&
+    process.env.UPSTASH_REDIS_REST_TOKEN
+  );
+}
+
+/**
+ * Get or create the singleton Redis client.
+ */
+function getRedisClient(): Redis {
+  if (!redisClient) {
+    redisClient = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL!,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    });
+  }
+  return redisClient;
+}
+
+/**
+ * Get or create a Ratelimit instance for the given config.
+ * Upstash Ratelimit instances are reusable and cache-friendly.
+ */
+function getRatelimiter(config: RateLimitConfig): Ratelimit {
+  const key = `${config.limit}:${config.windowMs}`;
+  let limiter = ratelimitCache.get(key);
+  if (!limiter) {
+    limiter = new Ratelimit({
+      redis: getRedisClient(),
+      limiter: Ratelimit.slidingWindow(
+        config.limit,
+        `${config.windowMs} ms` as Parameters<typeof Ratelimit.slidingWindow>[1]
+      ),
+      analytics: false,
+      prefix: 'wp-xbrl-rl',
+    });
+    ratelimitCache.set(key, limiter);
+  }
+  return limiter;
+}
+
+async function checkRateLimitRedis(
+  identifier: string,
+  config: RateLimitConfig
+): Promise<RateLimitResult> {
+  const limiter = getRatelimiter(config);
+  const { success, remaining, reset } = await limiter.limit(identifier);
+
+  return {
+    allowed: success,
+    remaining,
+    resetAt: reset,
+    limit: config.limit,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Check rate limit for a given identifier.
+ *
+ * Uses Upstash Redis when configured, otherwise falls back to in-memory.
+ * Returns a Promise so callers must `await` the result.
+ */
+export async function checkRateLimit(
+  identifier: string,
+  config: RateLimitConfig
+): Promise<RateLimitResult> {
+  if (isRedisConfigured()) {
+    try {
+      return await checkRateLimitRedis(identifier, config);
+    } catch (error) {
+      // If Redis fails, fall back to in-memory so the app stays available
+      console.warn(
+        'Upstash Redis rate limit failed, falling back to in-memory:',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+      return checkRateLimitInMemory(identifier, config);
+    }
+  }
+
+  return checkRateLimitInMemory(identifier, config);
+}
+
+/**
+ * Get client identifier from request.
+ * Uses X-Forwarded-For header or falls back to a default.
  */
 export function getClientIdentifier(request: Request): string {
   // Try to get IP from headers (common in proxied environments)

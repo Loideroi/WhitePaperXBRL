@@ -72,7 +72,7 @@ function getFormatName(format: SupportedFormat): string {
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // Rate limiting
   const clientId = getClientIdentifier(request);
-  const rateLimit = checkRateLimit(`upload:${clientId}`, RATE_LIMITS.upload);
+  const rateLimit = await checkRateLimit(`upload:${clientId}`, RATE_LIMITS.upload);
 
   if (!rateLimit.allowed) {
     return NextResponse.json(

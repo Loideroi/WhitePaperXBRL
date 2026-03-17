@@ -19,66 +19,71 @@ describe('Rate Limiter', () => {
   const testConfig: RateLimitConfig = { limit: 3, windowMs: 60_000 };
 
   describe('checkRateLimit', () => {
-    it('should allow the first request', () => {
-      const result = checkRateLimit('test-first', testConfig);
+    it('should allow the first request', async () => {
+      const result = await checkRateLimit('test-first', testConfig);
 
       expect(result.allowed).toBe(true);
       expect(result.remaining).toBe(2);
       expect(result.limit).toBe(3);
     });
 
-    it('should decrement remaining on each request', () => {
-      const r1 = checkRateLimit('test-decrement', testConfig);
-      const r2 = checkRateLimit('test-decrement', testConfig);
+    it('should decrement remaining on each request', async () => {
+      const r1 = await checkRateLimit('test-decrement', testConfig);
+      const r2 = await checkRateLimit('test-decrement', testConfig);
 
       expect(r1.remaining).toBe(2);
       expect(r2.remaining).toBe(1);
     });
 
-    it('should deny requests over the limit', () => {
-      checkRateLimit('test-over', testConfig);
-      checkRateLimit('test-over', testConfig);
-      checkRateLimit('test-over', testConfig);
-      const r4 = checkRateLimit('test-over', testConfig);
+    it('should deny requests over the limit', async () => {
+      await checkRateLimit('test-over', testConfig);
+      await checkRateLimit('test-over', testConfig);
+      await checkRateLimit('test-over', testConfig);
+      const r4 = await checkRateLimit('test-over', testConfig);
 
       expect(r4.allowed).toBe(false);
       expect(r4.remaining).toBe(0);
     });
 
-    it('should reset the window after expiry', () => {
-      checkRateLimit('test-reset', testConfig);
-      checkRateLimit('test-reset', testConfig);
-      checkRateLimit('test-reset', testConfig);
+    it('should reset the window after expiry', async () => {
+      await checkRateLimit('test-reset', testConfig);
+      await checkRateLimit('test-reset', testConfig);
+      await checkRateLimit('test-reset', testConfig);
 
       // Advance past the window
       vi.advanceTimersByTime(61_000);
 
-      const result = checkRateLimit('test-reset', testConfig);
+      const result = await checkRateLimit('test-reset', testConfig);
 
       expect(result.allowed).toBe(true);
       expect(result.remaining).toBe(2);
     });
 
-    it('should track identifiers independently', () => {
-      checkRateLimit('user-a', testConfig);
-      checkRateLimit('user-a', testConfig);
-      checkRateLimit('user-a', testConfig);
+    it('should track identifiers independently', async () => {
+      await checkRateLimit('user-a', testConfig);
+      await checkRateLimit('user-a', testConfig);
+      await checkRateLimit('user-a', testConfig);
 
       // user-a is now at limit, but user-b should be fresh
-      const resultA = checkRateLimit('user-a', testConfig);
-      const resultB = checkRateLimit('user-b', testConfig);
+      const resultA = await checkRateLimit('user-a', testConfig);
+      const resultB = await checkRateLimit('user-b', testConfig);
 
       expect(resultA.allowed).toBe(false);
       expect(resultB.allowed).toBe(true);
       expect(resultB.remaining).toBe(2);
     });
 
-    it('should include resetAt timestamp in the future', () => {
+    it('should include resetAt timestamp in the future', async () => {
       vi.setSystemTime(new Date('2025-06-15T12:00:00Z'));
 
-      const result = checkRateLimit('test-resetat', testConfig);
+      const result = await checkRateLimit('test-resetat', testConfig);
 
       expect(result.resetAt).toBeGreaterThan(Date.now());
+    });
+
+    it('should return a Promise', () => {
+      const result = checkRateLimit('test-promise', testConfig);
+      expect(result).toBeInstanceOf(Promise);
     });
   });
 

@@ -40,7 +40,7 @@ const ValidateRequestSchema = z.object({
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // Rate limiting
   const clientId = getClientIdentifier(request);
-  const rateLimit = checkRateLimit(`validate:${clientId}`, RATE_LIMITS.validate);
+  const rateLimit = await checkRateLimit(`validate:${clientId}`, RATE_LIMITS.validate);
 
   if (!rateLimit.allowed) {
     return NextResponse.json(

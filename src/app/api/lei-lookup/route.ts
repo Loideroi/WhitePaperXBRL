@@ -28,7 +28,7 @@ const RequestSchema = z.object({
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // Rate limiting (reuse validate limits since this is a validation-adjacent operation)
   const clientId = getClientIdentifier(request);
-  const rateLimit = checkRateLimit(`lei-lookup:${clientId}`, RATE_LIMITS.validate);
+  const rateLimit = await checkRateLimit(`lei-lookup:${clientId}`, RATE_LIMITS.validate);
 
   if (!rateLimit.allowed) {
     return NextResponse.json(
