@@ -270,6 +270,32 @@ export const ENUMERATION_MAPPINGS: Record<string, Record<string, EnumerationMapp
   'mica:CompetentAuthorityForCreditInstitutions': COMPETENT_AUTHORITY_ENUM,
   'mica:DomicileOfCompanyOfPersonInvolvedInImplementationOfOtherToken': COUNTRY_ENUM,
   'mica:RedemptionCurrency': CURRENCY_ENUM,
+
+  // ART (Asset-Referenced Token) enumeration mappings
+  'mica:AssetreferencedTokenTypeOfWhitePaper': WHITE_PAPER_TYPE_ENUM,
+  'mica:AssetreferencedTokenTypeOfSubmission': SUBMISSION_TYPE_ENUM,
+  'mica:AssetreferencedTokenHomeMemberState': MEMBER_STATE_ENUM,
+  'mica:AssetreferencedTokenHostMemberStates': MEMBER_STATE_ENUM,
+  'mica:PublicOfferingOrAdmissionToTradingForAssetreferencedToken': PUBLIC_OFFERING_ENUM,
+  'mica:TargetedHoldersForAssetreferencedToken': TARGETED_HOLDERS_ENUM,
+  'mica:PlacementFormForAssetreferencedToken': PLACEMENT_FORM_ENUM,
+  'mica:AuthorisationAuthorityForAssetreferencedTokenIssuer': COMPETENT_AUTHORITY_ENUM,
+  'mica:AssetreferencedTokenIssuersRegisteredCountry': COUNTRY_ENUM,
+  'mica:AssetreferencedTokenIssuersHeadOfficeCountry': COUNTRY_ENUM,
+  'mica:DomicileOfCompanyOfPersonInvolvedInImplementationOfAssetreferencedToken': COUNTRY_ENUM,
+
+  // EMT (E-Money Token) enumeration mappings
+  'mica:EmoneyTokenTypeOfWhitePaper': WHITE_PAPER_TYPE_ENUM,
+  'mica:EmoneyTokenTypeOfSubmission': SUBMISSION_TYPE_ENUM,
+  'mica:EmoneyTokenHomeMemberState': MEMBER_STATE_ENUM,
+  'mica:EmoneyTokenHostMemberStates': MEMBER_STATE_ENUM,
+  'mica:PublicOfferingOrAdmissionToTradingForEmoneyToken': PUBLIC_OFFERING_ENUM,
+  'mica:TargetedHoldersForEmoneyToken': TARGETED_HOLDERS_ENUM,
+  'mica:PlacementFormForEmoneyToken': PLACEMENT_FORM_ENUM,
+  'mica:AuthorisationAuthorityForEmoneyTokenIssuer': COMPETENT_AUTHORITY_ENUM,
+  'mica:EmoneyTokenIssuersRegisteredCountry': COUNTRY_ENUM,
+  'mica:EmoneyTokenIssuersHeadOfficeCountry': COUNTRY_ENUM,
+  'mica:DomicileOfCompanyOfPersonInvolvedInImplementationOfEmoneyToken': COUNTRY_ENUM,
 };
 
 /**
