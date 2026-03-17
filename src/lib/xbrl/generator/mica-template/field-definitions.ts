@@ -8,7 +8,7 @@
  * MiCA-template numbered table format (Parts A-J + Summary + Sustainability).
  */
 
-import type { XBRLDataType, WhitepaperPart } from '@/types/taxonomy';
+import type { XBRLDataType, WhitepaperPart, TokenType } from '@/types/taxonomy';
 
 /**
  * MiCA field definition for a single reportable element
@@ -2431,29 +2431,65 @@ export const SECTION_TITLES: Record<string, string> = {
 };
 
 /**
- * Get fields for a specific section
+ * ART (Asset-Referenced Token) field definitions — Table 3
+ * TODO: Populate from taxonomy-bundle.json
  */
-export function getFieldsForSection(section: WhitepaperPart | 'summary' | 'S'): MiCAFieldDefinition[] {
-  return OTHR_FIELD_DEFINITIONS.filter(f => f.section === section);
+export const ART_FIELD_DEFINITIONS: MiCAFieldDefinition[] = [];
+
+/**
+ * EMT (E-Money Token) field definitions — Table 4
+ * TODO: Populate from taxonomy-bundle.json
+ */
+export const EMT_FIELD_DEFINITIONS: MiCAFieldDefinition[] = [];
+
+/**
+ * Get field definitions for a given token type
+ */
+export function getFieldDefinitions(tokenType: TokenType = 'OTHR'): MiCAFieldDefinition[] {
+  switch (tokenType) {
+    case 'ART':
+      return ART_FIELD_DEFINITIONS;
+    case 'EMT':
+      return EMT_FIELD_DEFINITIONS;
+    case 'OTHR':
+    default:
+      return OTHR_FIELD_DEFINITIONS;
+  }
 }
 
 /**
- * Get a field by its XBRL element name
+ * Get fields for a specific section, optionally filtered by token type
  */
-export function getFieldByElement(xbrlElement: string): MiCAFieldDefinition | undefined {
-  return OTHR_FIELD_DEFINITIONS.find(f => f.xbrlElement === xbrlElement);
+export function getFieldsForSection(
+  section: WhitepaperPart | 'summary' | 'S',
+  tokenType: TokenType = 'OTHR'
+): MiCAFieldDefinition[] {
+  return getFieldDefinitions(tokenType).filter(f => f.section === section);
+}
+
+/**
+ * Get a field by its XBRL element name, optionally for a specific token type
+ */
+export function getFieldByElement(
+  xbrlElement: string,
+  tokenType: TokenType = 'OTHR'
+): MiCAFieldDefinition | undefined {
+  return getFieldDefinitions(tokenType).find(f => f.xbrlElement === xbrlElement);
 }
 
 /**
  * Get all non-dimensional fields (for standard table rendering)
  */
-export function getStandardFields(): MiCAFieldDefinition[] {
-  return OTHR_FIELD_DEFINITIONS.filter(f => !f.isDimensional);
+export function getStandardFields(tokenType: TokenType = 'OTHR'): MiCAFieldDefinition[] {
+  return getFieldDefinitions(tokenType).filter(f => !f.isDimensional);
 }
 
 /**
  * Get all dimensional fields for a specific dimension type
  */
-export function getDimensionalFields(dimensionType: MiCAFieldDefinition['dimensionType']): MiCAFieldDefinition[] {
-  return OTHR_FIELD_DEFINITIONS.filter(f => f.dimensionType === dimensionType);
+export function getDimensionalFields(
+  dimensionType: MiCAFieldDefinition['dimensionType'],
+  tokenType: TokenType = 'OTHR'
+): MiCAFieldDefinition[] {
+  return getFieldDefinitions(tokenType).filter(f => f.dimensionType === dimensionType);
 }

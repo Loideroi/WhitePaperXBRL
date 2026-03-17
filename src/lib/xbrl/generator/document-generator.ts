@@ -29,7 +29,7 @@ import { generateHiddenBlock, type HiddenFactEntry } from './template/hidden-fac
 import { escapeHtml, getUnitRefForType } from './template/inline-tagger';
 import {
   getFieldsForSection,
-  OTHR_FIELD_DEFINITIONS,
+  getFieldDefinitions,
 } from './mica-template/field-definitions';
 import {
   getEnumerationUri,
@@ -55,15 +55,20 @@ const NAMESPACES: Record<string, string> = {
 };
 
 /**
- * Taxonomy reference - specific OTHR entry point
+ * Taxonomy entry point reference per token type
  */
-const TAXONOMY_REF = 'https://www.esma.europa.eu/taxonomy/2025-03-31/mica/mica_entry_table_2.xsd';
+const TAXONOMY_REFS: Record<string, string> = {
+  OTHR: 'https://www.esma.europa.eu/taxonomy/2025-03-31/mica/mica_entry_table_2.xsd',
+  ART: 'https://www.esma.europa.eu/taxonomy/2025-03-31/mica/mica_entry_table_3.xsd',
+  EMT: 'https://www.esma.europa.eu/taxonomy/2025-03-31/mica/mica_entry_table_4.xsd',
+};
 
 /**
  * XBRL element names for country enumeration fields.
  * Used to identify country fields in the rawFields fallback path.
  */
 const COUNTRY_ENUM_ELEMENTS = new Set([
+  // OTHR
   'mica:OfferorsRegisteredCountry',
   'mica:OfferorsHeadOfficeCountry',
   'mica:IssuersRegisteredCountry',
@@ -71,6 +76,14 @@ const COUNTRY_ENUM_ELEMENTS = new Set([
   'mica:OperatorsRegisteredCountry',
   'mica:OperatorsHeadOfficeCountry',
   'mica:DomicileOfCompanyOfPersonInvolvedInImplementationOfOtherToken',
+  // ART
+  'mica:AssetreferencedTokenIssuersHeadOfficeCountry',
+  'mica:AssetreferencedTokenIssuersRegisteredCountry',
+  'mica:DomicileOfCompanyOfPersonInvolvedInImplementationOfAssetreferencedToken',
+  // EMT
+  'mica:EmoneyTokenIssuersHeadOfficeCountry',
+  'mica:EmoneyTokenIssuersRegisteredCountry',
+  'mica:DomicileOfCompanyOfPersonInvolvedInImplementationOfEmoneyToken',
 ]);
 
 /**
@@ -408,9 +421,11 @@ function mapDataToFactValues(
   }
 
   // Fill in from rawFields for any field not already mapped via typed extraction
+  const tokenType = data.tokenType || 'OTHR';
+  const fieldDefinitions = getFieldDefinitions(tokenType);
   const rawFields = getNestedValue(dataObj, 'rawFields') as Record<string, string> | undefined;
   if (rawFields) {
-    for (const fieldDef of OTHR_FIELD_DEFINITIONS) {
+    for (const fieldDef of fieldDefinitions) {
       // Skip if already mapped
       if (values.has(fieldDef.xbrlElement)) continue;
       // Skip dimensional fields (management body members etc.)
@@ -576,8 +591,10 @@ export function generateIXBRLDocument(data: Partial<WhitepaperData>): string {
   // Render all section content
   const sectionPages: string[] = [];
 
+  const docTokenType = data.tokenType || 'OTHR';
+
   for (const sectionKey of allSections) {
-    const fields = getFieldsForSection(sectionKey);
+    const fields = getFieldsForSection(sectionKey, docTokenType);
     if (fields.length === 0) continue;
 
     const sectionHtml = renderSection(sectionKey, fields, factValues, hiddenFacts);
@@ -722,7 +739,7 @@ ${sectionPages.join('\n')}
     <ix:header>
 ${hiddenBlockXml}
       <ix:references xml:lang="${data.language || 'en'}">
-        <link:schemaRef xlink:href="${TAXONOMY_REF}" xlink:type="simple" />
+        <link:schemaRef xlink:href="${TAXONOMY_REFS[data.tokenType || 'OTHR']}" xlink:type="simple" />
       </ix:references>
       <ix:resources>
 ${contextsXml}
@@ -791,7 +808,7 @@ export function createIXBRLDocument(
     units,
     facts,
     language: data.language || 'en',
-    taxonomyRef: TAXONOMY_REF,
+    taxonomyRef: TAXONOMY_REFS[data.tokenType || 'OTHR'] ?? TAXONOMY_REFS['OTHR']!,
     duplicateCheck,
   };
 }

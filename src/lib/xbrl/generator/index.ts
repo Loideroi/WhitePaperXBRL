@@ -32,5 +32,13 @@ export { renderSection, renderDimensionalSection } from './template/section-rend
 export { renderCoverPage, renderTableOfContents, wrapInPage } from './template/page-layout';
 
 // MiCA template data
-export { OTHR_FIELD_DEFINITIONS, getFieldsForSection, getFieldByElement, SECTION_TITLES } from './mica-template/field-definitions';
+export {
+  OTHR_FIELD_DEFINITIONS,
+  ART_FIELD_DEFINITIONS,
+  EMT_FIELD_DEFINITIONS,
+  getFieldDefinitions,
+  getFieldsForSection,
+  getFieldByElement,
+  SECTION_TITLES,
+} from './mica-template/field-definitions';
 export { ENUMERATION_MAPPINGS, getEnumerationUri, getEnumerationLabel } from './mica-template/enumeration-mappings';
