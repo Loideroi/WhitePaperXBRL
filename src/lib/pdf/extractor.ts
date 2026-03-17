@@ -6,6 +6,9 @@
 
 import pdf from 'pdf-parse';
 
+/** Minimum character threshold — below this, text extraction likely failed (scanned PDF) */
+const OCR_FALLBACK_THRESHOLD = 100;
+
 export interface PdfExtractionResult {
   /** Full extracted text */
   text: string;
@@ -50,10 +53,26 @@ export async function extractPdfText(buffer: Buffer): Promise<PdfExtractionResul
   try {
     const data = await pdf(buffer);
 
-    const sections = detectSections(data.text);
+    let text = data.text;
+    let ocrUsed = false;
+
+    // OCR fallback: if pdf-parse returns very little text, the PDF is likely scanned
+    if (text.trim().length < OCR_FALLBACK_THRESHOLD) {
+      try {
+        const ocrText = await extractWithOCR(buffer);
+        if (ocrText.trim().length > text.trim().length) {
+          text = ocrText;
+          ocrUsed = true;
+        }
+      } catch {
+        // OCR failed — continue with whatever text we have
+      }
+    }
+
+    const sections = detectSections(text);
 
     return {
-      text: data.text,
+      text,
       pages: data.numpages,
       metadata: {
         title: data.info?.Title,
@@ -63,6 +82,7 @@ export async function extractPdfText(buffer: Buffer): Promise<PdfExtractionResul
         producer: data.info?.Producer,
         creationDate: data.info?.CreationDate,
         modificationDate: data.info?.ModDate,
+        ...(ocrUsed && { ocrUsed: 'true' }),
       },
       sections,
     };
@@ -301,4 +321,24 @@ export function extractNumber(text: string): { value: number; confidence: number
   }
 
   return null;
+}
+
+/**
+ * OCR fallback for scanned PDFs using Tesseract.js.
+ * Converts PDF pages to images then runs OCR.
+ * This is a best-effort fallback — quality depends on scan quality.
+ */
+async function extractWithOCR(buffer: Buffer): Promise<string> {
+  // Dynamic import to avoid loading tesseract.js unless needed
+  const { createWorker } = await import('tesseract.js');
+
+  const worker = await createWorker('eng');
+
+  try {
+    // Tesseract.js can process PDF buffers directly
+    const { data } = await worker.recognize(buffer);
+    return data.text;
+  } finally {
+    await worker.terminate();
+  }
 }
