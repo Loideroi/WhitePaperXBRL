@@ -7,7 +7,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { X, Download, Copy, Check, Code, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Download, Copy, Check, Code, FileText, Eye, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface IXBRLPreviewProps {
   /** The iXBRL content to display */
@@ -29,7 +29,7 @@ interface Section {
 
 export function IXBRLPreview({ content, filename, onClose, onDownload }: IXBRLPreviewProps) {
   const [copied, setCopied] = useState(false);
-  const [viewMode, setViewMode] = useState<'formatted' | 'raw'>('formatted');
+  const [viewMode, setViewMode] = useState<'rendered' | 'formatted' | 'raw'>('rendered');
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
   // Parse sections from the iXBRL content
@@ -188,12 +188,24 @@ export function IXBRLPreview({ content, filename, onClose, onDownload }: IXBRLPr
             {/* View Mode Toggle */}
             <div className="flex rounded-lg border overflow-hidden">
               <button
+                onClick={() => setViewMode('rendered')}
+                className={`px-2 py-1 text-xs ${
+                  viewMode === 'rendered'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background hover:bg-muted'
+                }`}
+                title="Rendered view"
+              >
+                <Eye className="h-3.5 w-3.5" />
+              </button>
+              <button
                 onClick={() => setViewMode('formatted')}
                 className={`px-2 py-1 text-xs ${
                   viewMode === 'formatted'
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-background hover:bg-muted'
                 }`}
+                title="Formatted XML"
               >
                 <FileText className="h-3.5 w-3.5" />
               </button>
@@ -204,6 +216,7 @@ export function IXBRLPreview({ content, filename, onClose, onDownload }: IXBRLPr
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-background hover:bg-muted'
                 }`}
+                title="Raw XML"
               >
                 <Code className="h-3.5 w-3.5" />
               </button>
@@ -235,7 +248,16 @@ export function IXBRLPreview({ content, filename, onClose, onDownload }: IXBRLPr
 
         {/* Content */}
         <div className="flex-1 overflow-auto bg-muted/30">
-          {viewMode === 'formatted' ? (
+          {viewMode === 'rendered' ? (
+            <div className="p-4 h-full">
+              <iframe
+                srcDoc={content}
+                sandbox="allow-same-origin"
+                title="iXBRL Document Preview"
+                className="w-full h-full min-h-[70vh] bg-white rounded-lg border"
+              />
+            </div>
+          ) : viewMode === 'formatted' ? (
             <div className="p-4 space-y-4">
               {sections.length > 0 ? (
                 sections.map((section) => (
