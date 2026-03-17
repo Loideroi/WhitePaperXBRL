@@ -16,11 +16,11 @@
 | 9 | Tier 1: Block Tagging (ix:continuation / ix:exclude) | DONE | 5a53a53 |
 | 10 | Tier 1: Duplicate Fact Detection | DONE | bcba0c9 |
 | 11 | Tier 1: Multi-Language Output | DONE | 88e9978 |
-| 12 | Tier 2: iXBRL Preview (embedded viewer) | PENDING | |
+| 12 | Tier 2: iXBRL Preview (embedded viewer) | DONE | 300ce8c |
 | 13 | Tier 2: GLEIF LEI Lookup | DONE | 53249c6 |
-| 14 | Tier 2: Session Persistence | PENDING | |
-| 15 | Tier 2: Authentication | PENDING | |
-| 16 | Tier 2: Redis Rate Limiting | PENDING | |
+| 14 | Tier 2: Session Persistence | DONE | 70927c6 |
+| 15 | Tier 2: Authentication | DONE | 1a2bbc9 |
+| 16 | Tier 2: Redis Rate Limiting | DONE | 7d05843 |
 | 17 | Tier 3: OCR Fallback | PENDING | |
 | 18 | Tier 3: Taxonomy Browsing API | PENDING | |
 | 19 | Tier 3: Batch Processing | PENDING | |
