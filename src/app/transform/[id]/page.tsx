@@ -6,7 +6,7 @@
  * Displays extracted whitepaper fields and allows editing before generating iXBRL.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -23,6 +23,7 @@ import { ValidationDashboard, type ValidationError } from '@/components/validati
 import { IXBRLPreview } from '@/components/preview';
 import type { MappedField, WhitepaperData } from '@/types/whitepaper';
 import type { TokenType } from '@/types/taxonomy';
+import { saveSession } from '@/lib/session/storage';
 
 interface SectionConfig {
   id: string;
@@ -498,6 +499,25 @@ export default function TransformPage() {
       loadSessionData();
     }
   }, [sessionId]);
+
+  // Auto-save session data on changes (debounced 500ms)
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (loadingState !== 'success' || !sessionId || !data) return;
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      saveSession(sessionId, data, {
+        filename: filename || 'unknown',
+        tokenType,
+        confidence: confidence ?? 0,
+      });
+    }, 500);
+
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [data, sessionId, loadingState, filename, tokenType, confidence]);
 
   // Handle field changes
   const handleFieldChange = useCallback((path: string, value: unknown) => {

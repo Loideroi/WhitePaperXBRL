@@ -1,5 +1,6 @@
 import { FileUp, CheckCircle, Download, Shield } from 'lucide-react';
 import { UploadZone } from '@/components/upload';
+import { RecentSessions } from '@/components/upload/RecentSessions';
 
 export default function Home() {
   return (
@@ -28,6 +29,7 @@ export default function Home() {
         {/* Upload Area */}
         <div className="mt-12">
           <UploadZone />
+          <RecentSessions />
         </div>
       </section>
 
