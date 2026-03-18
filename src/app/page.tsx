@@ -1,7 +1,6 @@
 import { FileUp, CheckCircle, Download, Shield } from 'lucide-react';
 import { UploadZone } from '@/components/upload';
 import { RecentSessions } from '@/components/upload/RecentSessions';
-import { SignInButton } from '@/components/auth/SignInButton';
 
 export default function Home() {
   return (
@@ -15,7 +14,7 @@ export default function Home() {
               MiCA Compliant
             </span>
           </div>
-          <SignInButton />
+          <span className="text-sm text-muted-foreground">v1.0</span>
         </div>
       </header>
 

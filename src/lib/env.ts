@@ -20,12 +20,6 @@ const envSchema = z.object({
   // Upstash Redis REST credentials for distributed rate limiting
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
-  // Auth.js (NextAuth) configuration
-  AUTH_SECRET: z.string().min(1).optional(),
-  AUTH_GITHUB_ID: z.string().min(1).optional(),
-  AUTH_GITHUB_SECRET: z.string().min(1).optional(),
-  AUTH_GOOGLE_ID: z.string().min(1).optional(),
-  AUTH_GOOGLE_SECRET: z.string().min(1).optional(),
 });
 
 /**
@@ -53,11 +47,6 @@ export function getEnv(): Env {
     REDIS_URL: process.env.REDIS_URL,
     UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
     UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
-    AUTH_SECRET: process.env.AUTH_SECRET,
-    AUTH_GITHUB_ID: process.env.AUTH_GITHUB_ID,
-    AUTH_GITHUB_SECRET: process.env.AUTH_GITHUB_SECRET,
-    AUTH_GOOGLE_ID: process.env.AUTH_GOOGLE_ID,
-    AUTH_GOOGLE_SECRET: process.env.AUTH_GOOGLE_SECRET,
   });
 
   if (!result.success) {
@@ -76,11 +65,6 @@ export function getEnv(): Env {
       REDIS_URL: undefined,
       UPSTASH_REDIS_REST_URL: undefined,
       UPSTASH_REDIS_REST_TOKEN: undefined,
-      AUTH_SECRET: undefined,
-      AUTH_GITHUB_ID: undefined,
-      AUTH_GITHUB_SECRET: undefined,
-      AUTH_GOOGLE_ID: undefined,
-      AUTH_GOOGLE_SECRET: undefined,
     };
 
     return cachedEnv;

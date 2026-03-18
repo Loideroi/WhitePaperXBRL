@@ -19,7 +19,7 @@
 | 12 | Tier 2: iXBRL Preview (embedded viewer) | DONE | 300ce8c |
 | 13 | Tier 2: GLEIF LEI Lookup | DONE | 53249c6 |
 | 14 | Tier 2: Session Persistence | DONE | 70927c6 |
-| 15 | Tier 2: Authentication | DONE | 1a2bbc9 |
+| 15 | Tier 2: Authentication | REMOVED | was 1a2bbc9 |
 | 16 | Tier 2: Redis Rate Limiting | DONE | 7d05843 |
 | 17 | Tier 3: OCR Fallback | DONE | 32d9ebd |
 | 18 | Tier 3: Taxonomy Browsing API | DONE | 32d9ebd |
