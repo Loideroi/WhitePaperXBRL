@@ -320,4 +320,43 @@ describe('document-generator rawFields numeric handling', () => {
       );
     });
   });
+
+  describe('Part B non-applicability', () => {
+    it('should set B.1 to false when partB is marked as not applicable', () => {
+      const data = makeMinimalData({
+        partB: {
+          legalName: 'Not applicable - Issuer is same as Offeror',
+          registeredAddress: 'Not applicable',
+          lei: 'Not applicable',
+          country: '',
+          notApplicable: true,
+        } as unknown as WhitepaperData['partB'],
+      });
+      const html = generateIXBRLDocument(data);
+      // B.1 should be 'false' (issuer is NOT different from offeror)
+      expect(html).toContain(
+        'name="mica:IssuerDifferentFromOfferrorOrPersonSeekingAdmissionToTrading"'
+      );
+      expect(html).toMatch(
+        /IssuerDifferentFromOfferrorOrPersonSeekingAdmissionToTrading[^>]*>false</
+      );
+    });
+
+    it('should set B.1 to true when partB has real issuer data', () => {
+      const data = makeMinimalData({
+        partB: {
+          legalName: 'Different Issuer Corp',
+          registeredAddress: '456 Other St',
+          lei: '984500B6F8407AE38911',
+          country: 'MT',
+        },
+      });
+      const html = generateIXBRLDocument(data);
+      expect(html).toMatch(
+        /IssuerDifferentFromOfferrorOrPersonSeekingAdmissionToTrading[^>]*>true</
+      );
+      // Should include issuer name
+      expect(html).toContain('Different Issuer Corp');
+    });
+  });
 });

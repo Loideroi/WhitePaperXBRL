@@ -386,8 +386,9 @@ function cleanTextContent(text: string): string {
     .replace(/\s{2,}/g, ' ')
     .trim();
   // Strip MiCA section headers that bleed from adjacent sections
-  cleaned = cleaned.replace(/[\n ]+Part\s+[A-JS]:\s*\n[A-Z][^\n]+$/, '');
-  cleaned = cleaned.replace(/\s+Part\s+[A-JS]:\s+[A-Z][A-Za-z ]+$/, '');
+  // After whitespace collapsing, headers appear as: "...text. Part X: Title..."
+  cleaned = cleaned.replace(/\.\s+Part\s+[A-JS]\s*:\s+[A-Z][\s\S]*$/, '.');
+  cleaned = cleaned.replace(/\.\s+[A-JS]\.\d+\.\s+[A-Z][\s\S]*$/, '.');
   return cleaned;
 }
 
@@ -1425,12 +1426,19 @@ function cleanFieldContent(content: string): string {
     .join('\n')
     .trim();
 
-  // Strip MiCA section headers that bleed from adjacent sections
-  // e.g., content ending with "\n\nPart D:\nInformation about the crypto-asset project"
-  // After smartJoinLines, the paragraph break may have collapsed to a space or \n
-  cleaned = cleaned.replace(/[\n ]+Part\s+[A-JS]:\s*\n[A-Z][^\n]+$/, '');
-  // Also handle fully joined case (single line): "...secure. Part D: Information about..."
-  cleaned = cleaned.replace(/\s+Part\s+[A-JS]:\s+[A-Z][A-Za-z ]+$/, '');
+  // Strip MiCA section headers that bleed from adjacent sections.
+  // The last field in a section often captures the next section's header, e.g.:
+  //   "...Swiss Rules of Arbitration.\nPart F: Information about the crypto-assets"
+  //   "...Sweden.\nPart G: Information on the rights and obligations attached..."
+  // Headers may contain hyphens, commas, parentheses, digits, and mixed-case words,
+  // so we match any text after "Part X:" to end of string.
+  cleaned = cleaned.replace(/\n\s*Part\s+[A-JS]\s*:[\s\S]*$/, '');
+  // Fully joined case (smartJoinLines collapsed the newline to a space):
+  //   "...Arbitration. Part F: Information about the crypto-assets"
+  cleaned = cleaned.replace(/\.\s+Part\s+[A-JS]\s*:\s+[A-Z][\s\S]*$/, '.');
+  // Sub-section markers that bleed in: "J.1. Mandatory information..." / "J.2. Supplementary..."
+  cleaned = cleaned.replace(/\n\s*[A-JS]\.\d+\.\s+[A-Z][\s\S]*$/, '');
+  cleaned = cleaned.replace(/\.\s+[A-JS]\.\d+\.\s+[A-Z][\s\S]*$/, '.');
 
   // Strip trailing periods from single-line values (not multi-line prose)
   if (!cleaned.includes('\n')) {
@@ -1478,6 +1486,24 @@ function cleanFieldSpecific(content: string, fieldNum: string): string {
   if (fieldNum === 'E.4') {
     const cleaned = content.replace(/^[a-z]\s+/i, '');
     if (cleaned !== content) return cleaned;
+  }
+
+  // F.15, F.16: Boolean indicator fields — strip label text that bleeds into value.
+  // PDF extraction often produces "Voluntary dataflag False - mandatory" or
+  // "Personal dataflag False - no" instead of just "False" / "True".
+  if (fieldNum === 'F.15' || fieldNum === 'F.16') {
+    const boolMatch = content.match(/\b(true|false)\b/i);
+    if (boolMatch?.[1]) return boolMatch[1].charAt(0).toUpperCase() + boolMatch[1].slice(1).toLowerCase();
+  }
+
+  // Generic boolean indicator cleanup for fields with "True/False" values
+  // that have label text prepended (e.g., "Newly established False").
+  // Only apply for short content (< 100 chars) to avoid stripping "false" from
+  // long prose that coincidentally contains the word.
+  const booleanFields = ['A.15', 'D.6', 'D.9', 'D.11', 'E.6', 'F.17', 'G.6', 'G.9', 'G.12', 'G.14', 'G.16', 'H.6', 'H.8'];
+  if (booleanFields.includes(fieldNum) && content.length < 100) {
+    const boolMatch = content.match(/\b(true|false)\b/i);
+    if (boolMatch?.[1]) return boolMatch[1].charAt(0).toUpperCase() + boolMatch[1].slice(1).toLowerCase();
   }
 
   return content;
@@ -1550,8 +1576,8 @@ function populateNotApplicableSections(text: string, rawFields: Record<string, s
     C: { start: 2, end: 15 },  // C.2 through C.15 (C.1 might have explanation)
   };
 
-  // Check for "Part B does not apply" patterns
-  const partBNotApplicable = /Part\s*B\s*does\s*not\s*apply|Issuer\s*(?:is|was)\s*(?:the\s*)?same\s*as\s*(?:the\s*)?Offeror/i.test(text);
+  // Check for "Part B does not apply" patterns (multiple whitepaper phrasings)
+  const partBNotApplicable = /Part\s*B\s*does\s*not\s*apply|Issuer\s*(?:is|was)\s*(?:the\s*)?same\s*as\s*(?:the\s*)?Offeror|Non-?applicability\s*of\s*Part\s*B/i.test(text);
   const partCNotApplicable = /Part\s*C\s*does\s*not\s*apply|Non-?applicability\s*of\s*Part\s*C/i.test(text);
 
   // Sub-field variants that the integer loop doesn't cover
@@ -1831,11 +1857,14 @@ export function mapPdfToWhitepaper(
   // populateNotApplicableSections() already fills rawFields["B.2"]–["B.13"] etc.,
   // but the editor also has typed paths (partB.legalName, partB.lei, etc.) that
   // would otherwise stay empty and show as "missing" in coverage reports.
-  if (/Part\s*B\s*does\s*not\s*apply|Issuer\s*(?:is|was)\s*(?:the\s*)?same\s*as\s*(?:the\s*)?Offeror/i.test(fullText)) {
+  const partBNotApplicableGlobal = /Part\s*B\s*does\s*not\s*apply|Issuer\s*(?:is|was)\s*(?:the\s*)?same\s*as\s*(?:the\s*)?Offeror|Non-?applicability\s*of\s*Part\s*B/i.test(fullText);
+  if (partBNotApplicableGlobal) {
     const naText = 'Not applicable - Issuer is same as Offeror';
     if (!data.partB || !(data.partB as Record<string, unknown>).legalName) setNestedValue(data, 'partB.legalName', naText);
     if (!data.partB || !(data.partB as Record<string, unknown>).registeredAddress) setNestedValue(data, 'partB.registeredAddress', naText);
     if (!data.partB || !(data.partB as Record<string, unknown>).lei) setNestedValue(data, 'partB.lei', naText);
+    // Mark Part B as non-applicable so the generator sets B.1 = false
+    setNestedValue(data, 'partB.notApplicable', true);
   }
   if (/Part\s*C\s*does\s*not\s*apply|Non-?applicability\s*of\s*Part\s*C/i.test(fullText)) {
     const naText = 'Not applicable - White paper drafted by Offeror';
@@ -1867,8 +1896,27 @@ export function mapPdfToWhitepaper(
   if (rawFields['A.16'] && !rawFields['A.16a']) {
     rawFields['A.16a'] = rawFields['A.16'];
   }
+  // Prevent A.16b from inheriting A.16 via the sub-field fallback in the generator.
+  // A.16a = financial condition, A.16b = governance arrangements — they are distinct.
+  // If the whitepaper has a single A.16 field, only A.16a should get the content.
+  if (rawFields['A.16'] && !rawFields['A.16b']) {
+    rawFields['A.16b'] = '';
+  }
   if (data.partA && (data.partA as Record<string, unknown>).country && !rawFields['A.4c']) {
     rawFields['A.4c'] = (data.partA as Record<string, unknown>).country as string;
+  }
+
+  // Remap Part D fields: some whitepapers use simplified numbering (D.5-D.10) while
+  // the ESMA taxonomy uses D.1-D.14. Content-aware remapping fills taxonomy fields.
+  // Whitepaper D.9 ("Resource allocation") → Taxonomy D.14
+  // Whitepaper D.10 ("Planned use of collected funds") → Taxonomy D.13
+  // Detection: in taxonomy, D.9 is a boolean (TokenValueProtectionSchemesIndicator),
+  // so if D.9 contains long text (>50 chars), it's from simplified numbering.
+  if (rawFields['D.9'] && !rawFields['D.14'] && rawFields['D.9'].length > 50) {
+    rawFields['D.14'] = rawFields['D.9'];
+  }
+  if (rawFields['D.10'] && !rawFields['D.13'] && rawFields['D.10'].length > 50) {
+    rawFields['D.13'] = rawFields['D.10'];
   }
 
   // E.9 is an enumeration field (EUR/USD/GBP/CHF) but raw extraction captures

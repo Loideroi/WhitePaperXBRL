@@ -253,10 +253,15 @@ function mapDataToFactValues(
 
   // Part B mappings
   if (data.partB) {
-    setValueIfPresent('mica:IssuerDifferentFromOfferrorOrPersonSeekingAdmissionToTrading', 'true');
-    setValueIfPresent('mica:NameOfOtherTokenIssuer', getNestedValue(dataObj, 'partB.legalName'));
-    setValueIfPresent('mica:IssuersLegalEntityIdentifier', getNestedValue(dataObj, 'partB.lei'));
-    setValueIfPresent('mica:IssuersRegisteredAddress', getNestedValue(dataObj, 'partB.registeredAddress'));
+    // Detect non-applicability: B.1 = false when issuer is same as offeror
+    const partBNotApplicable = (data.partB as Record<string, unknown>).notApplicable === true;
+    const b1Value = partBNotApplicable ? 'false' : 'true';
+    setValueIfPresent('mica:IssuerDifferentFromOfferrorOrPersonSeekingAdmissionToTrading', b1Value);
+    if (!partBNotApplicable) {
+      setValueIfPresent('mica:NameOfOtherTokenIssuer', getNestedValue(dataObj, 'partB.legalName'));
+      setValueIfPresent('mica:IssuersLegalEntityIdentifier', getNestedValue(dataObj, 'partB.lei'));
+      setValueIfPresent('mica:IssuersRegisteredAddress', getNestedValue(dataObj, 'partB.registeredAddress'));
+    }
   }
 
   // Part C mappings

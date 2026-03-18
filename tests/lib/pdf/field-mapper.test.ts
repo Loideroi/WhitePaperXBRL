@@ -703,4 +703,103 @@ describe('mapPdfToWhitepaper', () => {
       }
     });
   });
+
+  describe('Section header bleed — broad pattern matching', () => {
+    it('should strip headers with hyphens and complex titles (Part F, Part G)', () => {
+      // E.40 content ending with "Part F: Information about the crypto-assets"
+      const extraction = createExtractionResult([
+        ['partE', 'E.39    Applicable law    Laws of Switzerland.\nE.40    Competent court    Swiss Rules of Arbitration.\nPart F: Information about the crypto-assets'],
+      ]);
+      const result = mapPdfToWhitepaper(extraction);
+      const rawE40 = result.data.rawFields?.['E.40'];
+      expect(rawE40).toBeDefined();
+      expect(rawE40).not.toContain('Part F');
+      expect(rawE40).toContain('Swiss Rules');
+    });
+
+    it('should strip headers with long titles containing hyphens', () => {
+      // F.19 content ending with "Part G: Information on the rights and obligations attached to the crypto-assets"
+      const extraction = createExtractionResult([
+        ['partF', 'F.19    Host member states    Austria, Belgium, Sweden.\nPart G: Information on the rights and obligations attached to the crypto-assets'],
+      ]);
+      const result = mapPdfToWhitepaper(extraction);
+      const rawF19 = result.data.rawFields?.['F.19'];
+      expect(rawF19).toBeDefined();
+      expect(rawF19).not.toContain('Part G');
+      expect(rawF19).toContain('Austria');
+    });
+
+    it('should strip sub-section markers like J.2.', () => {
+      // S.9 content ending with "J.2. Supplementary information..."
+      const extraction = createExtractionResult([
+        ['partS', 'S.9    Description of energy sources    Bottom-up approach methodology.\nJ.2. Supplementary information on principal adverse impacts'],
+      ]);
+      const result = mapPdfToWhitepaper(extraction);
+      const rawS9 = result.data.rawFields?.['S.9'];
+      expect(rawS9).toBeDefined();
+      expect(rawS9).not.toContain('J.2');
+      expect(rawS9).toContain('Bottom-up');
+    });
+  });
+
+  describe('Part B non-applicability detection', () => {
+    it('should detect "Non-applicability of Part B" phrasing', () => {
+      const extraction = createExtractionResult([
+        ['partA', 'A.1    Name    Example Corp\nA.6    LEI    529900T8BM49AURSDO55'],
+        ['partB', 'B.1\nIssuer different from offeror\nNon-applicability of Part B. Example Corp is the Issuer and the Offeror.'],
+      ]);
+      const result = mapPdfToWhitepaper(extraction);
+      // partB should be marked as not applicable
+      expect((result.data.partB as Record<string, unknown>)?.notApplicable).toBe(true);
+    });
+  });
+
+  describe('Boolean indicator field cleanup', () => {
+    it('should extract boolean from F.15 with label bleed', () => {
+      const extraction = createExtractionResult([
+        ['partF', 'F.15    Voluntary data flag    Voluntary dataflag False - mandatory\nF.16    Personal data flag    Personal dataflag False - no'],
+      ]);
+      const result = mapPdfToWhitepaper(extraction);
+      expect(result.data.rawFields?.['F.15']).toBe('False');
+      expect(result.data.rawFields?.['F.16']).toBe('False');
+    });
+
+    it('should extract boolean from fields with label prefix', () => {
+      const extraction = createExtractionResult([
+        ['partA', 'A.15    Newly established    False'],
+      ]);
+      const result = mapPdfToWhitepaper(extraction);
+      expect(result.data.rawFields?.['A.15']).toBe('False');
+    });
+  });
+
+  describe('Part D field number remapping', () => {
+    it('should remap whitepaper D.9 (Resource allocation) to taxonomy D.14', () => {
+      const extraction = createExtractionResult([
+        ['partD', 'D.9    Resource allocation    The resources allocated to the project primarily consist of non-financial contributions.'],
+      ]);
+      const result = mapPdfToWhitepaper(extraction);
+      expect(result.data.rawFields?.['D.14']).toContain('resources allocated');
+    });
+
+    it('should remap whitepaper D.10 (Planned use of funds) to taxonomy D.13', () => {
+      const extraction = createExtractionResult([
+        ['partD', 'D.10    Planned use of Collected funds or crypto-Assets    Part of the proceeds will be distributed to the Team.'],
+      ]);
+      const result = mapPdfToWhitepaper(extraction);
+      expect(result.data.rawFields?.['D.13']).toContain('proceeds');
+    });
+  });
+
+  describe('A.16b duplication prevention', () => {
+    it('should not duplicate A.16a financial condition into A.16b governance', () => {
+      const extraction = createExtractionResult([
+        ['partA', 'A.16    Financial condition for the past three years    Revenue grew 70% year over year.'],
+      ]);
+      const result = mapPdfToWhitepaper(extraction);
+      expect(result.data.rawFields?.['A.16a']).toContain('Revenue grew');
+      // A.16b should be empty (not duplicated from A.16)
+      expect(result.data.rawFields?.['A.16b']).toBe('');
+    });
+  });
 });

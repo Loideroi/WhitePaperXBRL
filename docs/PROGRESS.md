@@ -111,13 +111,19 @@ First XBRL submission rejected with 22 items. Fixes applied:
 - Generator rawFields loop uses token-type-aware field definitions
 - UI: Existing transform page works for all token types (labels are OTHR-centric, can be refined later)
 
-**Open Questions (BLOCKED — awaiting user answers):**
-1. #13 (F.4): Does F.4 need ART/EMT/OCA enum values? What taxonomy URIs?
-2. #8 (E.21/E.22): Content fix or add past-date validation?
-3. #2 (Statement 6): Which MiCA Article 6 summary statement?
-4. #17 (F.15/F.16): What is unclear — labels or values?
-5. #22 (Part I ToC): Is PDF ToC bleeding into Part I extraction?
-6. #11,18 (E.40→Part F, F.19→Part G): Cross-reference contamination — need to investigate PDF extraction boundaries
+**Open Questions — ALL RESOLVED (2026-03-18) via PERSIJA reference XBRL analysis:**
+1. ~~F.4: Does F.4 need ART/EMT/OCA enum values?~~ **NO** — F.4 is document type (Initial/Modified), not token type. Existing enums are correct.
+2. ~~E.21/E.22: Content fix or past-date validation?~~ **Content format** — dates are legitimately future. No past-date validation needed.
+3. ~~Statement 6: Which MiCA Article 6 summary?~~ **Article 6(5)(e)(f)** — compensation schemes / deposit guarantee disclaimer.
+4. ~~F.15/F.16: Labels or values?~~ **Label bleeding** — field labels leaked into values. Fixed with boolean extraction cleanup.
+5. ~~Part I ToC bleeding?~~ **Not ToC** — same section-header bleed as #6. Fixed with broader regex.
+6. ~~E.40→Part F, F.19→Part G cross-contamination~~ **Section header bleed** — pervasive issue. Fixed with robust regex stripping.
+
+**Additional fixes applied from reference analysis:**
+- B.1: Detect "Non-applicability of Part B" and set B.1=false (was hardcoded true)
+- A.16b: Prevent duplication of A.16a financial content into governance field
+- D.9/D.10→D.14/D.13: Remap simplified whitepaper numbering to taxonomy numbering
+- Boolean fields: Generic cleanup for A.15, D.6, D.9, D.11, E.6, F.15, F.16, F.17, G.6, G.9, G.12, G.14, G.16, H.6, H.8
 
 ## Notes
 
