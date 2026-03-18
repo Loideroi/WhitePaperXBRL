@@ -125,5 +125,5 @@ export function recordServerEvent(
   };
 
   // Structured JSON log — consumed by Vercel Log Drains, Datadog, etc.
-  console.log(JSON.stringify(event));
+  console.warn(JSON.stringify(event));
 }

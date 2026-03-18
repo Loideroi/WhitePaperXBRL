@@ -7,7 +7,7 @@
  */
 
 import { ChevronDown, ChevronRight, AlertCircle, CheckCircle } from 'lucide-react';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { TextField, BooleanField, MonetaryField, TextBlockField, DateField, EnumerationField } from './fields';
 import type { MappedField, ConfidenceLevel } from '@/types/whitepaper';
 
@@ -103,14 +103,7 @@ export function SectionEditor({
   defaultExpanded = true,
   expanded,
 }: SectionEditorProps) {
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
-
-  // Allow parent to force-expand the section (e.g., via "Fix" button)
-  useEffect(() => {
-    if (expanded) {
-      setIsExpanded(true);
-    }
-  }, [expanded]);
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded || expanded);
 
   const toggleExpanded = useCallback(() => {
     setIsExpanded((prev) => !prev);
