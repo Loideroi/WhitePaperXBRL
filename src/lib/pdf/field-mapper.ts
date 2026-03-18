@@ -1440,6 +1440,13 @@ function cleanFieldContent(content: string): string {
   cleaned = cleaned.replace(/\n\s*[A-JS]\.\d+\.\s+[A-Z][\s\S]*$/, '');
   cleaned = cleaned.replace(/\.\s+[A-JS]\.\d+\.\s+[A-Z][\s\S]*$/, '.');
 
+  // Strip section headers that bleed at the START of content (MFSA item #22).
+  // E.g., "Part I: Information on risks\nThe following risks..." → "The following risks..."
+  // Also handles ToC entries like "Table of Contents Part I: ..." at the start.
+  cleaned = cleaned.replace(/^(?:Table\s+of\s+Contents?\s*)?Part\s+[A-JS]\s*:[^\n]*\n\s*/, '');
+  // Strip ToC-style entries at the start: "I.1 Offer-related risks 25\nI.2 Issuer..."
+  cleaned = cleaned.replace(/^(?:[A-JS]\.\d+\s+[^\n]+\d+\s*\n)+/, '');
+
   // Strip trailing periods from single-line values (not multi-line prose)
   if (!cleaned.includes('\n')) {
     cleaned = cleaned.replace(/[.]+$/, '');
