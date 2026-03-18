@@ -10,7 +10,7 @@
 | 4 | Phase 3: UI — Preview Page | DONE | (existed) |
 | 5 | Phase 6: Integration — End-to-end flow | DONE | see below |
 | 6 | Phase 6: Integration — Error handling & loading states | DONE | (existed) |
-| 0 | **CRITICAL: Regulator Feedback Fixes** | IN PROGRESS | |
+| 0 | **CRITICAL: Regulator Feedback Fixes** | DONE | c47d185 |
 | 7 | Tier 1: ART Token Type (Table 3) | DONE | 12a16f0 |
 | 8 | Tier 1: EMT Token Type (Table 4) | DONE | 12a16f0 |
 | 9 | Tier 1: Block Tagging (ix:continuation / ix:exclude) | DONE | 5a53a53 |
